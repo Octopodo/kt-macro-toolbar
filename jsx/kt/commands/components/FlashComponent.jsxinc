@@ -1,0 +1,33 @@
+(function() {
+var superClass = KT.Components.Component;
+
+function addChildren() {
+  var child,
+      i = 0,
+      len = this.children.length,
+      component;
+
+  for(; i < len; i++) {
+    component = KT.Components.Flash.create(this.children[i]);
+    component.parent = this;
+    this.addChild(component);
+    component.addChildren()
+  }
+
+  delete this.children;
+
+}
+
+function FlashComponent(params){
+  superClass.call(this, params)
+}
+KT.Extend(FlashComponent, superClass);
+
+
+FlashComponent.prototype.addChildren = function(){
+  var stop = 0;
+  addChildren.call(this)
+}
+
+KT.Components.Flash.Component = FlashComponent;
+})();

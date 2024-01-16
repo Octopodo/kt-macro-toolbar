@@ -1,0 +1,55 @@
+(function() {
+
+function BuildAssets() {};
+BuildAssets.default = function(){
+  var child,
+      i = 0,
+      len = this.components.length,
+      source = this.source,
+      maxDuration = 0.1;
+  
+  
+  for(; i < len; i++) {
+    child = this.components[i];
+    if(!child.source) continue;
+    child.instance = source.layers.add(child.source);
+    child.instance.moveToEnd();
+    maxDuration = Math.max(maxDuration, child.data.duration)
+  }
+  if(!this.source) return;
+  this.source.duration = maxDuration;
+}
+KT.Algorithm.register('Flash: Build Assets', BuildAssets)
+
+
+
+
+function PlaceAssets() { }
+PlaceAssets.default = function() {
+  var self = this;
+  var data = this.data,
+      layer = this.instance,
+      frameDuration,
+      parent = this.parent,
+      baseWidth,
+      baseHeight
+  if(!layer) return
+
+  // parent = layer.containingComp;
+  baseX = this.parent.type === 'Timeline'?  0 : parent.data.size[0].width/2;
+  baseY =  this.parent.type === 'Timeline'? 0: parent.data.size[0].height/2;
+
+  if(data.timing.frames.length === 1) {
+    layer.transform.anchorPoint.setValue([data.anchor[0].x, data.anchor[0].y]);
+    layer.transform.position.setValue([data.position[0].x + baseX, data.position[0].y + baseY]);
+    layer.transform.rotation.setValue([data.rotation[0]])
+  }
+  // KT.Comps(this.source).fitToContent()
+  
+
+}
+KT.Algorithm.register('Flash: Place Assets', PlaceAssets);
+
+
+
+})();

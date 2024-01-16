@@ -1,0 +1,99 @@
+(function(){
+
+
+function copyKey(property, index){
+  var keyData = {
+    layer:                KT.Properties.getPropertyLayer(property),
+    isKtKey:              true,
+    index:                index,
+    property:             property,
+    time:                 property.keyTime(index),
+    value:                property.keyValue(index),
+    inInterpolationType:  property.keyInInterpolationType(index),
+    outInterpolationType: property.keyOutInterpolationType(index),
+    temporalAutoBezier:   property.keyTemporalAutoBezier(index),
+    temporalContBezier:   property.keyTemporalAutoBezier(index),
+    inTemporalEase:       property.keyInTemporalEase(index),
+    outTemporalEase:      property.keyOutTemporalEase(index),
+    isSpatial:            property.isSpatial, 
+
+    //Check spatial properties
+    roving:               !property.isSpatial ? null : property.keyRoving(index),
+    spatialAutoBezier:    !property.isSpatial ? null : property.keySpatialAutoBezier(index),
+    spatialContinuous:    !property.isSpatial ? null : property.keySpatialContinuous(index),
+    inSpatialTangent:     !property.isSpatial ? null : property.keyInSpatialTangent(index),
+    outSpatialTangent:    !property.isSpatial ? null : property.keyOutSpatialTangent(index),
+    twoD:                 !property.isSpatial ? null : property.propertyValueType === PropertyValueType.ThreeD_SPATIAL,
+    threeD:               !property.isSpatial ? null : property.propertyValueType === PropertyValueType.TwoD_SPATIAL,
+
+  }
+  
+  return keyData
+}
+
+
+function pasteKey(property, keyData){ 
+  
+  var keyIndex = property.addKey(keyData.time);
+  property.setValueAtKey(keyIndex, keyData.value);
+  property.setTemporalEaseAtKey(keyIndex, keyData.inTemporalEase, keyData.outTemporalEase);
+  property.setRovingAtKey(keyIndex, keyData.roving);
+
+  if(property.isSpatial === true){
+    property.setInterpolationTypeAtKey(keyIndex, keyData.inInterpolationType, keyData.outInterpolationType);
+    property.setTemporalAutoBezierAtKey(keyIndex, keyData.temporalAutoBezier);
+    property.setTemporalContinuousAtKey(keyIndex, keyData.temporalContBezier);
+    property.setSpatialAutoBezierAtKey(keyIndex, keyData.spatialAutoBezier);
+    property.setSpatialContinuousAtKey(keyIndex, keyData.spatialContinuous);
+    property.setSpatialTangentsAtKey(keyIndex, keyData.inSpatialTangent, keyData.outSpatialTangent);
+  }
+  
+  return keyIndex
+}
+
+
+
+
+function Keys(){};
+function initKeys(opts){
+  var properties = _.isArray(opts.source) ? _.uniq(_.flatten(Array.prototype.slice.call(opts.source))) : [opts.source],
+      keys = [],
+      layerOpts,
+      key,
+      i = 0, k ,
+      len = properties.length, klen,
+      property,
+      allKtKeys = true;
+
+  for(; i < len; i++) {
+    if(!properties[i].isKtKey) {
+      allKtKeys = false;
+      break;
+    }
+  }
+
+  if(allKtKeys === true) return properties;
+
+  for(i = 0; i < len; i++) {
+    property = properties[i];
+    if(_.isProperty(property) && _.hasKeys(property)){
+      for(k = 1, klen = property.numKeys; k <= klen; k++) {
+        key = copyKey(property, k);
+        keys.push(key)
+      }
+    }
+  }
+
+  return keys;
+}
+
+Keys.prototype = {
+  init: function(opts) {
+    return initKeys(opts)
+  }
+}
+
+KT.Keys = KT.ExtendArray(Keys)
+
+
+})();

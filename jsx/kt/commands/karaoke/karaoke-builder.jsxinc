@@ -1,0 +1,238 @@
+(function(){
+
+var MARKERS_COMP = 'markers',
+    LYRICS_FILE_NAME = 'letra.txt',
+    MAIN_FOLDER_NAME = 'KT-Karaoke',
+    TEXT_FOLDER_NAME = 'KT-Texts',
+    TEXTS_FOLDER_NAME = 'Text-Comps',
+    MAIN_COMP_NAME = 'KT-MASTER',
+    CONTROLS_LAYER_NAME = 'Text Controls',
+    COLOR = "Fill Color",
+    OPACITY = "Fill Opacity",
+    STROKE_COLOR = "Stroke Color",
+    STROKE_OPACITY = "Stroke Opacity",
+    STROKE_THICKNESS = "Stroke Width",
+
+    // BASE_COLOR: "Base Color",
+    // BASE_OPACITY: "Base Opacity",
+    // BASE_STROKE_COLOR: "Base Stroke Color",
+    // BASE_OPACITY: "Base Opacity",
+
+
+    TITLE_SEPARATOR = " - ",
+    NUMBER_FORMAT = 2; ///Reemplazar por function que analice el array
+
+
+var FONT_SIZE = 20,
+    FONT_FAMILY
+
+
+
+
+//Build a table based on a lyrics file and a comp with the markers
+//The lyrics file ¡¡¡¡MUST BE IN THE PTOJECT FILE!!!!
+function buildKaraokeTable(lyrics, markersComp) {
+  var lyrics = KT.IO.readFile(lyrics.file).split(/\r?\n/),
+      markers = KT.Keys({
+        source: markersComp.markerProperty,
+      }),
+      table = [],
+      line = {},
+      numLines = lyrics.length,
+      i = 0;
+  if(lyrics.length > markers.length -1) { return }
+  
+  for(; i < numLines; i++) {
+    line = {
+      text: lyrics[i],
+      startTime: markers[i].time,
+      endTime: markers[i+1].time
+    }
+    line.duration = line.endTime - line.startTime;
+    table.push(line)
+  }
+  return table
+
+};
+
+
+function addControls(comp) {
+  var controlsLayer = comp.layers.addNull(),
+      controls;
+
+  controlsLayer.name = CONTROLS_LAYER_NAME;
+  controls = {
+        baseColor: KT.Properties.addControl(controlsLayer,'Color', "Base " + COLOR, [1, 1, 1, 1]), 
+        baseOpacity: KT.Properties.addControl(controlsLayer,'Slider', "Base " + OPACITY, 100), 
+        baseStrokeColor: KT.Properties.addControl(controlsLayer,'Color', "Base " + STROKE_COLOR, [0, 0, 0]),
+        baseStrokeOpacity: KT.Properties.addControl(controlsLayer,'Slider', "Base " + STROKE_OPACITY, 100), 
+        baseStrokeThicknes: KT.Properties.addControl(controlsLayer,'Slider', "Base " + STROKE_THICKNESS, 15), 
+        overlayColor: KT.Properties.addControl(controlsLayer,'Color', "Overlay " + COLOR, [1, 246/255, 0]), 
+        overlayOpacity: KT.Properties.addControl(controlsLayer,'Slider', "Overlay " + OPACITY, 100)
+      };
+
+  return controls
+}
+
+
+function addTextStyles(layer) {
+  var animator = layer.property("ADBE Text Properties").property("ADBE Text Animators").addProperty("ADBE Text Animator"),
+      type = layer.name.split(' ')[0],
+      fillColor, fillOpacity,
+      strokeColor, strokeOpacity, strokeThickness;
+
+  animator = animator.property("ADBE Text Animator Properties");
+
+
+  fillColor = animator.addProperty("ADBE Text Fill Color");
+  fillOpacity = animator.addProperty("ADBE Text Fill Opacity");
+
+  fillColor.expression = linkColor.toString() + "; linkColor();";
+  fillOpacity.expression = linkSlider.toString() + "; linkSlider();";
+
+  if(type === "Overlay") return;
+
+  strokeColor = animator.addProperty("ADBE Text Stroke Color");
+  strokeOpacity = animator.addProperty("ADBE Text Stroke Opacity");
+  strokeThickness = animator.addProperty("ADBE Text Stroke Width");
+
+  strokeColor.expression = linkColor.toString() + "; linkColor();";
+  strokeOpacity.expression = linkSlider.toString() + "; linkSlider();";
+  strokeThickness.expression = linkSlider.toString() + "; linkSlider();";
+    
+  
+
+  function linkColor() {
+    var textType = thisLayer.name.split(" ") [0];
+    var propValue =thisProperty.name;
+    var name = textType + " " + propValue;
+    // propType = propValue.pop() ? "Slider" ? "Slider" : Color;
+    return comp("KT-MASTER").layer("Text Controls").effect(name)("Color")
+  }
+  function linkSlider() {
+    var textType = thisLayer.name.split(" ") [0];
+    var propValue =thisProperty.name;
+    var name = textType + " " + propValue;
+    // propType = propValue.pop() ? "Slider" ? "Slider" : Color;
+    return comp("KT-MASTER").layer("Text Controls").effect(name)("Slider")
+  }
+}
+
+
+
+
+
+function buildProject(lyricsTable, markersComp) {
+  var mainFolder = KT.Project.addFolder(MAIN_FOLDER_NAME),
+      textsFolder = KT.Project.addFolder(TEXT_FOLDER_NAME),
+      bounds,
+      left, right,
+      mask,
+      mainComp,
+      comp,
+      line,
+      baseLayer,
+      overlayLayer,
+      controlsLayer,
+      numLines = lyricsTable.length,
+      i = 0,
+      baseLayer;
+
+  mainComp = markersComp.duplicate();
+  mainComp.name = MAIN_COMP_NAME;
+  mainComp.parentFolder = mainFolder;
+  // mainComp = KT.Project.addComp({
+  //   name: MAIN_COMP_NAME,
+  //   duration: _.reduce(lyricsTable, function(memo, line) { return memo + line.duration }, 0) + lyricsTable[0].startTime,
+  //   folder: mainFolder
+  // }),
+
+  if(mainComp.layers.length > 1) { 
+    KT.Layers({
+      source: mainComp,
+      calback: function(layer){
+        if(_.isAudio(layer.source)) {
+          return
+        }
+        layer.remove() 
+      
+      }
+    })
+  }
+  textsFolder.parentFolder = mainFolder;
+  controlsLayer = addControls(mainComp);
+
+  for(; i < numLines; i++) {
+    line = lyricsTable[i];
+    if(line.text === "") { continue };
+    line.comp = KT.Project.addComp({
+      name: _.formatInteger(i, (numLines - 1).toString().length) + TITLE_SEPARATOR + line.text,
+      duration: line.duration,
+      folder: textsFolder
+    });
+    baseLayer = KT.Text.add(line.comp);
+    baseLayer.property("ADBE Text Properties").property('ADBE Text Document').expression = function exec(){
+      var txt = thisComp.name.split(" - ");
+      return txt[txt.length - 1]
+    }.toString() + "; exec()";
+
+    baseLayer.name = "Base Text";
+    bounds = KT.Layers.fitToComp(baseLayer);
+
+    overlayLayer = baseLayer.duplicate();
+    overlayLayer.name = "Overlay Text";
+
+    addTextStyles(baseLayer);
+    addTextStyles(overlayLayer);
+
+
+
+    mask = line.comp.layers.addSolid([0, 1, 0], "Mask", Math.ceil(bounds.width), Math.ceil(bounds.height) * 2, 1);
+    left = mask.transform.position.value[0] - mask.width;
+    right = mask.transform.position.value[0];
+
+    var y = mask.transform.position.value[1]
+    mask.transform.position.setValueAtTime(0, [left, y]);
+    mask.transform.position.setValueAtTime(line.comp.duration - line.comp.frameDuration, [right, y]);
+    
+    overlayLayer.trackMatteType = TrackMatteType.ALPHA;
+    mask.enabled = false;
+    // var props = KT.Properties({
+    //   source: mask,
+    //   names: 'Position',
+    //   // callback: function(property) {
+    //   //   property.setValueAtTime(0, [left, property.value[1]]);
+    //   //   property.setValueAtTime(line.comp.duration, [right, property.value[1]]);
+    //   // }
+    // })
+
+    line.layer = mainComp.layers.add(line.comp);
+    line.layer.startTime = line.startTime;
+    line.layer.timeRemapEnabled = true;
+    line.layer.property("ADBE Time Remapping").setInterpolationTypeAtKey(2, KeyframeInterpolationType.LINEAR, KeyframeInterpolationType.HOLD);
+    line.layer.property("ADBE Time Remapping").setValueAtKey(2, line.layer.source.duration - line.layer.source.frameDuration)
+  }
+}
+
+
+
+function buildKaraoke() {
+  var 
+      text = KT.Project.get(LYRICS_FILE_NAME)[0],
+      comp = app.project.selection[0],
+      table,
+      comps;
+
+  if(!text || !comp) { return }
+
+  table = buildKaraokeTable(text, comp);
+  comps = buildProject(table, comp);
+
+
+}
+
+
+KT.Commands.karaoke = buildKaraoke;
+
+
+})();

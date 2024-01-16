@@ -1,0 +1,584 @@
+(function(){
+//CONSTANTS
+
+var MASTER_FOLDER_NAME = 'KT_PROJECT',
+    DATA_FOLDER_NAME = '__data__',
+    DATA_COMP_NAME = '__data_comp__',
+    DATA_LAYER_NAME = '__data_layer_',
+    KT_PROJECT_CREATED = '__kt__project__created__'
+
+var defaults = {
+  comps: {
+    NAME: 'KT_COMP', 
+    WIDTH: 1920,
+    HEIGHT: 1080,
+    PAR: 1,
+    DURATION: 10,
+    FPS: 25
+  }
+}
+
+
+/** Adds a comp to the project and adds it to a folder if a folder name is provided.
+* @function addComp
+* @memberof KT.Project
+* @param {Object} [opts] A configuration object for the comp creation
+* @param {FolderItem|String|Path} [opts.folder=app.project.items] - A FolderItem, a folder name or a folder path to move the comp. 
+* @param {String} [opts.name='KT_Comp'] - The name of the new comp.
+* @param {Number} [opts.width=1920] - The width of the new comp.
+* @param {Number} [opts.height=1080] - The height of the new comp.
+* @param {Number} [opts.par=1] - The pixel aspect ratio of the new comp.
+* @param {Number} [opts.duration=30] - The duration in seconds of the new comp.
+* @param {Number} [opts.fps=25] - The frame rate of the new comp.
+* @returns {CompItem} The new comp
+*/
+function addComp(opts) {
+  var defs = defaults.comps,
+      opts = opts || {},
+      name = _.isString(opts.name) ? opts.name : defs.NAME,
+      width = _._.isNumber(opts.width) ? opts.width : defs.WIDTH,
+      height = _.isNumber(opts.height) ? opts.height : defs.HEIGHT,
+      par = opts.par ||defs.PAR,
+      duration = opts.duration || defs.DURATION,
+      fps = opts.fps || defs.FPS,
+      folder = getFolder(opts.folder),
+      comp;
+  
+  width = width < 4 ? 4 : width;
+  width = width > 30000 ? 30000 : width;
+  height = height < 4 ? 4 : height;
+  height = height > 30000 ? 30000 : height;
+  comp = app.project.items.addComp(name, width, height, par, duration, fps);
+  if(_.isComp(comp) && _.isFolder(folder)){
+    comp.parentFolder = folder;
+  } 
+  return comp
+}
+
+
+/**Creates a comp and adds a FootageItem to his layers
+* @function adCompFromFootage
+* @memberof KT.Project
+* @param {FootageItem|CompItem} footage - A comp or a footage item to add in the comp.
+* @param {FolderItem|String|Path} [opts.folder=app.project.items] - A FolderItem, a folder name or a folder path to move the comp. 
+* @returns {CompItem} The created comp
+*/
+function addCompFromItem(footage, folder, duration) {
+  if(!_.isItem(footage) || _.isFolder()) return;
+  
+  var name = footage.name.replace(/\.[^.]+$/, ""),
+      name = name.replace(/\[(.+?)\]/g, '');
+      comp = addComp({
+        name: name ,
+        width: footage.width,
+        height: footage.height ,
+        par: footage.pixelAspect,
+        duration: _.isImage(footage) || duration <= 0 ? duration || 10 :  footage.mainSource.duration,
+        fps: footage.frameRate,
+        folder: folder
+      });
+  if(_.isComp(comp)) {
+    comp.layers.add(footage);
+    return comp
+  }
+}
+
+
+function addFolder(path) {
+  var folder = getFolder(path),
+      name,
+      folderPath;
+  if(_.isFolder(folder)) {
+    return folder
+  }
+  path = getPathObject(path)
+  folder = app.project.items.addFolder(path.name);
+  moveItemsToPath(path.path, folder);
+  return folder
+}
+
+
+/** Filters the passed param and returns a the folder item in the project, if exists
+* @function getFolder
+* @memberof KT.Project
+* @param {FolderItem|String|Path} comp - A FolderItem, a comp name or a comp path to move the comp. 
+* 
+*/
+function getFolder(folder) {
+  var folder = _.isString(folder) ? 
+                    _.isFolder(folder) 
+                      : null ?
+                    folder
+                : getItemFromPath(folder) || getFolders(folder);
+  
+  folder = folder !== null && folder.length === 1 ? folder[0] : folder;
+  
+  if(_.isFolder(folder)) {
+    return folder;
+  } else {
+    return app.project.items;
+  }
+}
+
+
+
+/**Simple check for file extensions
+* @function checkType
+* @memberof KT.Project
+* @private
+* @param {String} name - The item name to check
+* @param {String|String[]} [types] String or array from strings of the types to check. If not pased all types pass the check.
+*/
+function checkType(name, types){
+  var types = _.isArray(types) ?  _.isString(types) :  null ?  [types] : _.flatten(types) ;
+  if(types === null || types === undefined) return true;
+  types = '\.' + (types.join('|\.')); 
+  types = new RegExp(types, 'g');
+  return name.match(types) !== null
+}
+
+
+/** Filters the passed param and returns a the comp if exists
+* @function getComp
+* @memberof KT.Project
+* @param {CompItem|String|Path} comp - A CompItem, a comp name or a comp path to move the comp. 
+* 
+*/
+function getComp(comp) {
+  var comp = _.isString(comp) ? 
+                    _.isFolder(comp) 
+                      : null ?
+                    comp
+                : getItemFromPath(comp) || getFolders(comp)[0];
+  
+  if(_.isComp(comp)) {
+    return comp
+  }
+}
+
+
+/**Gets the path of an item in the project structure. The path format uses double slash--> the//path//to//the//item
+* @param {AVItem} item - The item 
+* @returns {String} The paht of the item or an empty string.
+*/
+function getItemPath(item) {
+  var item = _.isItem(item) || _.isFolder(item) ? item : null,
+      path,
+      parent = item.parentFolder;
+
+  if(!item) {return ''};
+
+  path = parent.name
+  while(parent !== null){
+    parent = parent.parentFolder;
+    path = parent !== null ? parent.name + '//' + path : path;
+  }
+  return path.replace('Root//', '') + '//' + item.name
+};
+
+
+/**Gets an item in the project,if exists, from the provided path. Tha path format must be in double slash--> the//path//to//item
+* @function getItemFromPath
+* @memberof KT.Project
+* @param {String} path - The path to the item including the name of the item
+* @returns {Item|FolderItem} - If exists, the item 
+*/
+function getItemFromPath(path){
+  var path = _.isString (path) ? path.split('//') : [],
+      itemName = path[path.length - 1],
+      pathName = path[0],
+      items = app.project.rootFolder.items,
+      i = 1, p = 0,
+      len = path.length,
+      item,
+      selectedItem;
+
+  for(; i <= items.length; i++) {
+    item = items[i];
+    if(pathName === item.name) {
+      i = 0;
+      items = _.isFolder(item) ? item.items : items;
+      p++
+      pathName = path[p]
+    }
+    if(p === path.length && item.name === path[p - 1]){
+      selectedItem = item;
+      break;
+    }
+  }
+  return selectedItem
+};
+
+
+/**Move the passed items to the path in the project structure
+* @function moveItemsToPath
+* @memberof KT
+* @param {FolderItem|String|Path} [opts.folder=app.project.items] - A FolderItem, a folder name or a folder path to move the comp. 
+* @param {Item|Item[]|RestArgs} rest An Item, an array of Items or coma separated Item arguments
+* @returns The moved items
+*/
+function moveItemsToPath(path){
+  if(arguments.length <= 1) return false;
+
+  var items = _.flatten(Array.prototype.slice.call(arguments, 1)),
+      folder = _.ternary(
+        _.isFolder(path),  path 
+        , path === '',  app.project.items
+        , getFolder(path)
+      ),
+      i = 0,
+      len,
+      item;
+
+  if(_.isFolder(folder)) {
+    items = getItems(items);
+    for(len = items.length; i < len; i++) {
+      item = items[i];
+      item.parentFolder = folder;
+    }
+    return items
+ 
+  }
+};
+
+
+/** Filters and get the passed items in the project based on a condition
+* @function getItems
+* @memberof KT.Project
+* @param {Item|String|Item[]|String} [items] - The items to get. Can be an array of Strings or items. Otherwhise the values are ignored. If no items pased, gets all the items
+* @param {Function} [condition]
+*/
+function getItems(items, condition, deep) {
+  var getAll = items === undefined ||items.length === 0 ? true : false,
+      inputItems = _.isArray(items) ? _.flatten(items) : [items],
+      condition = _.isFunction(condition) ? condition : function() { return true },
+      items = [],
+      names = [],
+      j = 0,
+      len = inputItems.length,
+      item;
+
+  for(; j < len; j++) {
+    item = inputItems[j];
+    if(_.isString(item)) { names.push(item) }
+    else if((_.isItem(item) || _.isFolder(item)) && condition(item, j) === true) {
+      items.push(item)
+    }
+  }
+
+  traverseProject(function(item, i) {
+    if(getAll) {
+      if(condition(item, i)) {
+        items.push(item)
+      }
+    }
+
+    for(j = 0, len = names.length; j < len; j++) {
+      var name = names[j];
+      if(item.name === name && condition(item, j)){
+        items.push(item)
+      }
+    }
+  })
+
+  return items
+};
+
+
+/**Wrapper method for getItems to get comps.
+* @function getComps
+* @memberof KT.Project
+* @param {CompItem|String|CompItem[]|String} [items] 
+* @return The comps
+*/
+function getComps(comps) {
+  var comps = getItems(comps, function(item) { 
+    return _.isComp(item)
+  })
+  return comps
+};
+
+
+/**Wrapper method for getItems to get folders.
+* @function getFolders
+* @memberof KT.Project
+* @param {FolderItem|String|FolderItem[]|String} [items] 
+* @return The folders.
+*/
+function getFolders(folders) {
+  return getItems(folders, function(item) {
+    return _.isFolder(item)
+  })
+};
+
+
+/**Wrapper method for getItems to get audio items.
+* @function getAudios
+* @memberof KT.Project
+* @param {FootageItem|String|FootageItem[]|String} [items] 
+* @return The audio items
+*/
+function getAudios(audios, types) {
+  var types = arguments.length > 1 ? Array.prototype.slice.call(arguments, 1) : undefined; 
+  return getItems(audios, function(item) { 
+    return _.isAudio(item) && checkType(item.name, types);
+  })
+};
+
+
+/**Wrapper method for getItems to get image items.
+* @function getImages
+* @memberof KT.Project
+* @param {FootageItem|String|FootageItem[]|String} [items] 
+* @return The image items
+*/
+function getImages(images) {
+  var types = arguments.length > 1 ? Array.prototype.slice.call(arguments, 1) : undefined; 
+  return _.getItems(images, function(item) {
+    return _.isImage(item) && checkType(item.name, types);
+  } )
+};
+
+
+/**Wrapper method for getItems to get video items.
+* @function getVideos
+* @memberof KT.Project
+* @param {FootageItem|String|FootageItem[]|String} [items] 
+* @return The video items
+*/
+function getVideos(videos, types) {
+  var types = arguments.length > 1 ? Array.prototype.slice.call(arguments, 1): undefined; 
+  return _.getItems(videos, function(item) { 
+    return _.isVideo(item) && checkType(item.name, types);
+  })
+};
+
+function getPathObject(path) {
+  if(!_.isString(path) ||path === '') {return {name: '', path:'', root: ''}}
+  var path = path.split('//');
+  if(path.length > 0) {
+    path = {
+      root: path[0],
+      name: path.pop(),
+      path: path.join('//'),
+      
+    }
+  } else {
+    path = {root: 'Root', name: path, path: ''}
+  }
+  
+  return path
+}
+
+
+
+
+
+/**Internal function to traverse the project items
+* @function traverseProject
+* @memberof KT.Project
+* @private
+* @param {Function} [callback] - A callback to perform on the items
+* @param {Items} items - Same as getItems
+* @returns The items that match 
+*/
+function traverseProject (callback, items) {
+  var items = items || app.project.items,
+      callback = _.isFunction(callback) ? callback : function(){return false},
+      item,
+      i = 1,
+      len = items.length,
+      res;
+
+  if(!callback) return [];
+
+  for(; i <= len; i++){
+    item = items[i];
+    callback(item, i);
+    if(item instanceof Folder){
+      traverseProject(callback, item.items);
+    }
+  } 
+};
+
+
+/**Imports a footage file to the project
+* @function importFile
+* @memberof KT.Project
+* @param {File} file - The file object with the footage item
+* @param {Boolean} toComp - If true, the object is nested inside a comp.
+* @param {String|FolderItem|path} footageFolder - If passed, the footage item is moved to the folder, if exists. 
+* @param * @param {String|FolderItem|path} compFolder - If passed, the comp item is moved to the folder, if exists. 
+* @returns {FootageItem|Comp} The footage item or a comp if the footage is comped
+*/
+function importFile(file, toComp, footageFolder, compFolder) {
+  if(!(file instanceof File)) return;
+  var options = new ImportOptions(file),
+      canImport = options.canImportAs(ImportAsType.FOOTAGE),
+      folder = getFolder(footageFolder),
+      footage;
+  
+  if(canImport) {
+    options.importAs = ImportAsType.FOOTAGE;
+    options.sequence = false;
+    footage = app.project.importFile(options);
+    if(_.isItem(footage) && _.isFolder(footageFolder)) {
+      moveItemsToPath(footageFolder, footage);
+    }
+    if(toComp) {
+      footage = addCompFromItem(footage, compFolder)
+    }
+    return footage
+  }
+    
+}
+
+/**Imports a footage sequence file to the project
+* @function importSequence
+* @memberof KT.Project
+* @param {File} file - The file object with the footage item
+* @param {Boolean} toComp - If true, the object is nested inside a comp.
+* @param {String|FolderItem|path} footageFolder - If passed, the footage item is moved to the folder, if exists. 
+* @param * @param {String|FolderItem|path} compFolder - If passed, the comp item is moved to the folder, if exists. 
+* @returns {FootageItem|Comp} The footage item or a comp if the footage is comped
+*/
+function importSequence(input, toComp, footageFolder, compFolder) {
+  if(!(input instanceof Folder)) return;
+
+  var files = input.getFiles();
+
+  if(files.length === 0) return;
+  if(files.length === 1) return importFile(files[0], toComp, footageFolder, compFolder)
+
+  var file = files[0],
+      options = new ImportOptions(file),
+      canImport = options.canImportAs(ImportAsType.FOOTAGE),
+      footageFolder = getFolder(footageFolder),
+      footage;
+  
+  if(canImport) {
+    options.importAs = ImportAsType.FOOTAGE;
+    options.sequence = true;
+    footage = app.project.importFile(options);
+    if(_.isItem(footage) && _.isFolder(footageFolder)) {
+      moveItemsToPath(footageFolder, footage);
+    }
+    if(toComp) {
+      footage = addCompFromItem(footage, compFolder)
+    }
+    return footage
+  }
+}
+
+
+function getActiveComp() {
+  if (app.project.activeItem instanceof CompItem === false) {
+    app.activeViewer.setActive();
+  }
+  return app.project.activeItem;
+}
+
+
+function importFootage(input, toComp, footageFolder, compFolder) {
+  if(!input.exists) {
+    $.writeln('File doesn\'t exists: ' + input.fullName);
+    return
+  }
+  if(input instanceof File) {
+    return importFile(input, toComp, footageFolder, compFolder);
+  }
+  if(input instanceof Folder) {
+    return importSequence(input, toComp, footageFolder, compFolder);
+  }
+}
+
+
+function saveProject(){
+  if(app.project.file === null) {
+    return app.project.saveWithDialog()
+  }
+}
+
+
+
+
+
+/**A module to deal with project items: create comps, import footage and filter project items. If called as function, return the project items
+* @namespace Project
+* @module
+* @memberof KT
+* @function Project
+*/
+
+function Project () {
+  return app.project
+};
+
+
+
+
+function createKTProject(store) {
+  var masterFolder = addFolder(MASTER_FOLDER_NAME),
+      dataFolder = addFolder(masterFolder.name + "//" + DATA_FOLDER_NAME),
+      dataComp = _.find(dataFolder.items, function(item) { return item.name === DATA_COMP_NAME})
+      || addComp({
+          name: DATA_COMP_NAME,
+          folder:dataFolder
+      }),
+      dataLayer = dataComp.layers.byName(DATA_LAYER_NAME) ||dataComp.layers.addText(DATA_LAYER_NAME)
+    
+    store.add(MASTER_FOLDER_NAME, masterFolder);
+    store.add(DATA_FOLDER_NAME, dataFolder);
+    store.add(DATA_COMP_NAME, dataComp);
+    store.add(DATA_LAYER_NAME, dataLayer);
+    store.add(KT_PROJECT_CREATED, true)
+}
+
+function checkProject(){
+  if(!KT.Project.store.exists(KT_PROJECT_CREATED)) {
+    createKTPd
+  }
+
+
+}
+
+
+var store = new KT.Store.addStore('Project');
+createKTProject(store)
+
+
+//Getters
+Project.store = function() { return store }
+Project.masterFolder = function() { return store.get(MASTER_FOLDER_NAME)};
+Project.dataFolder = function() { return store.get(DATA_FOLDER_NAME)};
+Project.dataComp = function() { return store.get(DATA_COMP_NAME)};
+Project.dataLayer = function() { return store.get(DATA_LAYER_NAME)};
+
+
+
+//Methods
+Project.addComp = addComp;
+Project.addFolder = addFolder;
+Project.addCompFromItem = addCompFromItem;
+Project.import = importFootage;
+Project.importFile = importFile;
+Project.importSequence = importSequence;
+
+Project.get = getItems;
+Project.getComps = getComps;
+Project.getFolders = getFolders;
+Project.getAudios = getAudios;
+Project.getImages = getImages;
+Project.getVideos = getVideos;
+
+Project.moveItemsToPath = moveItemsToPath;
+Project.getItemPath = getItemPath;
+Project.getItemFromPath = getItemFromPath;
+
+Project.getActiveComp = getActiveComp;
+Project.save = saveProject;
+
+
+KT.Project =  Project;
+
+})();

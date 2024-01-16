@@ -1,0 +1,32 @@
+(function() {
+
+/**/
+function secsFromTimecode(time, frameDuration) {
+  var _frameDuration_ = (!frameDuration) ? 1 / 25 : frameDuration;
+  var codes = time.split(":");
+
+  return parseInt(codes[0]) * 3600 +
+    parseInt(codes[1]) * 60 +
+    parseInt(codes[2]) +
+    parseInt(codes[3]) * _frameDuration_
+
+}
+
+
+function formatTime(time, units, frameDuration) {
+  if(units == 's'){
+    return time
+  } else if (units == 'f'){
+    return time * frameDuration
+  }
+}
+
+function Time() {}
+
+
+Time.prototype = {
+
+}
+
+KT.Time = Time;
+})();

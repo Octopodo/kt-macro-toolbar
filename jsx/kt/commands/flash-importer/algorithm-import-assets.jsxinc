@@ -1,0 +1,31 @@
+(function(){
+
+function importAssets() {};
+importAssets.default = function(footageFolder, compsFolder){
+  var source,
+      data = this.data;
+  
+
+  if(this.isDataLayer === true ||this.id === '') {
+  }
+  else if(data.path !== undefined){
+    source = new Folder(data.path);
+    source = KT.Project.import( source ,true, footageFolder, compsFolder);
+  } else {
+    var props = {
+      name: this.id,
+      width: Math.ceil(_.max(data.size, function(item){ return item.width}).width),
+      height: Math.ceil(_.max(data.size, function(item){ return item.height}).height),
+      duration: data.duration,
+      folder: compsFolder
+    }
+    if(_.isNaN(props.height)) $.bp();
+    source = KT.Project.addComp(props)
+  }
+  this.source = source
+}
+
+
+KT.Algorithm.register('Flash: Import Assets', importAssets);
+
+})();

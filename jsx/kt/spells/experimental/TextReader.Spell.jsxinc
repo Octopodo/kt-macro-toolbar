@@ -1,0 +1,232 @@
+KT.Spell('TextReader', 
+  function(){
+    //READ FILE
+    var file = File.openDialog();
+    if(!file) {
+      return
+    }
+    var isTxt = false;
+    file.name.replace(/.txt/g, function(){
+      isTxt = true;
+    })
+    if(!isTxt) {
+      return
+    }
+    //SETUP
+    var compedParagraphs
+    var text = KT.readFile(file.fsName);
+    var options = KT.cast('CommandConfig').Options();
+    options.commandOpts.audio = KT.findItem('locucion', [FootageItem]);
+    options.commandOpts.audioOffset = 0.5;
+    options.comp.settings.open = true;
+    options.properties.keyed = true;
+    options.comp.settings.duration = options.commandOpts.audio.duration;
+    options.interval.end = options.commandOpts.audio.duration; 
+    options.time.offset= -1;
+
+    //GET DATA
+    var paragraphs = this.segmentateText(text);
+    var times =  this.getAudioLines(paragraphs, options);
+    var mainFolder = app.project.items.addFolder('parrafos');
+    var sourceFolder = app.project.items.addFolder('sourceComps');
+    sourceFolder.parentFolder = mainFolder;
+    options.commandOpts.paragraphsFolder = sourceFolder;
+    
+    //GENERATE PARAGRAPHS
+    var paragraphLayers = [];
+    for(var i = 0, l = paragraphs.length; i < l; i++) {
+      var paragraph = paragraphs[i];
+      options.comp.settings.name = 'paragraph-' + (i+1)
+      options.commandOpts.pIndex = i;
+      var compedParagraph = this.createParagraph(paragraph, times, options);
+      if(!compedParagraph) {
+        continue
+      }
+      var paragraphLayer = this.masterComp.layers.add(compedParagraph.comp);
+      paragraphLayer.startTime = compedParagraph.data.startTime;
+      paragraphLayer.timeRemapEnabled = true;
+      var timeRemap = paragraphLayer.property('ADBE Time Remapping')
+      var newValue = timeRemap.keyValue(2) - this.masterComp.frameDuration;
+      timeRemap.setValueAtKey(2, newValue);
+      paragraphLayers.push(paragraphLayer)
+    }
+
+    options.commandOpts.cols = 1;
+    options.commandOpts.yOffset = 100;
+    KT.cast('LayerManager').gridLayersFill(paragraphLayers, options)
+
+    //CREATE A CONTROLLER and link layers
+    var controlLayer = KT.cast('CompManager').addNull([this.masterComp])
+    controlLayer.name = 'text-position-control';
+    controlLayer.moveToTheBegining()
+    for (var i = 0; i < paragraphLayers.length; i++) {
+      paragraphLayers[i].parent = controlLayer  
+    }
+    return 
+  },
+
+  function segmentateText(text) {
+    var schema, line, lines, paragraph;
+    var paragraphs = [];
+    var srcText = text.replace(/\n\r/g, '')
+    var splittedParagraphs = srcText.split('<R>');
+    for(var i = 0, l = splittedParagraphs.length; i < l; i++) {
+      paragraph = splittedParagraphs[i].replace(/\r?\n|\r/g, '');
+      schema = {lines: []};
+      lines = paragraph.split('<L>')
+      for(var j = 0, lj = lines.length; j < lj; j++){
+        schema.lines.push(lines[j]);
+      }
+      paragraphs.push(schema)
+    }
+    return paragraphs
+  },
+
+  function matchLinesAndTimes(paragraph, times){
+    var lines = paragraph.lines
+    var numLines = lines.length;
+    var startTime = times[0];
+    var p = {
+      startTime: times[0],
+      lines: []
+    }
+    for(var i = 0; i < numLines; i++) {
+      var line = {
+        text: lines[i],
+        start: times[0],
+        end: times[1],
+      }
+      p.lines.push(line);
+      times.splice(0, 2)
+    }
+    p.duration = p.lines[p.lines.length -1].end - p.startTime
+    return p
+  },
+  function createParagraph(paragraph, times, options){
+    //SETTUP
+    options.time.singleTime = true;
+    options.properties.filters.push('position')
+    options.properties.keyed = false
+    options.layer.filters.push('guideLayer')
+    var text = paragraph.lines.join('');
+    if(text == '' || text == '\n') {
+      $.writeln('Paragraph ' + options.commandOpts.pIdex + ' is empty');
+      return
+    }
+  
+    var textLength = text.length;
+
+    //MATCH TIMES WITH TEXT LINES
+    var segments = this.matchLinesAndTimes(paragraph, times);
+    $.writeln('Segments generated')
+
+    //GENERATE PARAGRAPH COMP
+    var comp = KT.findItem("base-text-comp").duplicate();
+    comp.duration = segments.duration
+    for(var i = 1, l = comp.layers.length - 1; i <= l; i++) {
+      comp.layers[i].outPoint = comp.duration
+    }
+    comp.name = 'paragraph-0' + options.commandOpts.pIndex.toString()
+    comp.parentFolder = options.commandOpts.paragraphsFolder;
+
+    //SETTING UP TEXT LAYERS
+    var blackTextLayer = comp.layers.byName('text-black');
+    var greyTextLayer = comp.layers.byName('text-grey');
+    var blackTextBox = blackTextLayer.property('Source Text').value
+    var greyTextBox = greyTextLayer.property('Source Text').value
+    blackTextLayer.outPoint = comp.duration;
+    greyTextLayer.outPoint = comp.duration;
+    blackTextBox.text = text;
+    greyTextBox.text = text;
+    blackTextLayer.property('Source Text').setValue(blackTextBox);
+    greyTextLayer.property('Source Text').setValue(greyTextBox);
+    var bounds = KT.cast('LayerManager').getLayersBounds([greyTextLayer], options)
+    bounds.height += 10
+    blackTextBox.boxTextSize = [blackTextBox.boxTextSize[0], bounds.height];
+    greyTextBox.boxTextSize = [greyTextBox.boxTextSize[0], bounds.height];
+    blackTextLayer.property('Source Text').setValue(blackTextBox);
+    greyTextLayer.property('Source Text').setValue(greyTextBox);
+    $.writeln('Text modified');
+
+    //SETTING CONTROLLERS
+    var sliderLayer = comp.layers.byName('CBG | Slider');
+    var controlLayer = comp.layers.byName('C | Slider')
+    var sliderBounds = KT.cast('LayerManager').getLayersBounds([sliderLayer], options);
+    var offset = [0, -(sliderBounds.top - bounds.bottom)];
+
+    KT.cast('PropertyManager').offsetProperty(sliderLayer.property('ADBE Transform Group').property('ADBE Position'), offset)
+
+    //SETTING THE SLIDER
+    //Set the keyframes on the slider controler
+    var max = controlLayer.property('ADBE Effect Parade').property('Pseudo/DUIK controller slider').property("Pseudo/DUIK controller slider-0008").value;
+    var min = 0;
+    var controller = controlLayer.property('ADBE Transform Group').property('ADBE Position');
+    var lastValue;
+    var interpolationType = KeyframeInterpolationType.LINEAR;
+    for(var i = 0, l = segments.lines.length; i < l; i++){
+      var line = segments.lines[i];
+      var lineLength = line.text.replace(/\s|\n|\.|\,|\:|\;|\-|\(|\)/g, '').length;
+      var startTime = line.start - segments.startTime;
+      var endTime = line.end - segments.startTime
+      var endPercentage = line.text.length / textLength;
+      var startValue = lastValue || 0
+      var endValue = lastValue =  endPercentage * max + startValue
+      controller.setValueAtTime(startTime, [startValue, controller.value[1]]);
+      controller.setValueAtTime(endTime, [endValue, controller.value[1]]);
+      controller.setInterpolationType(controller.nearestKeyIndex(startTime), interpolationType, interpolationType)
+      controller.setInterpolationType(controller.nearestKeyIndex(endTime), interpolationType, interpolationType)
+    } 
+
+    //FIT COMP TO CONTENT
+    KT.cast('CompManager').fitCompsToContent([comp], options);
+
+
+    //ADD AUDIO
+    var audioLayer = comp.layers.add(options.commandOpts.audio);
+    var audioOffset = options.commandOpts.audioOffset || 0
+    audioLayer.startTime = -segments.startTime + audioOffset
+    $.writeln('Paragraph ' + options.commandOpts.pIndex + ' created');
+    return {
+      comp: comp,
+      data: segments
+    }
+  },
+
+  function getAudioLines(schema, options){
+    var layer, property, times, greatThanZero, firstKey;
+    var audio = options.commandOpts.audio;
+    var limit = options.commandOpts.gainLimit || 0.05;
+    options.comp.settings.name = 'Master Comp'
+    this.masterComp = KT.cast('CompManager', 'createComp', options);
+    this.masterComp.layers.add(audio);
+    app.executeCommand(app.findMenuCommandId("Convertir audio en fotogramas clave"));
+    layer = this.masterComp.layers[1];
+    property = layer.property("ADBE Effect Parade").property("ADBE Slider Control").property("ADBE Slider Control-0001")
+    firstKey =(options.time.offset >= 0)? property.numKeys: 1;
+    greatThanZero = (property.keyValue(firstKey) > limit ) ? false: true
+    times = []
+    KT.cast('PropertyManager').crawl([property], options, function(prop, opts, keyIterator){
+      var key = keyIterator.k
+      var value = prop.keyValue(key);
+      if(greatThanZero) {
+        if(value > limit){
+          times.push(prop.keyTime(key));
+          greatThanZero = false
+        } else {
+          prop.removeKey(key);
+          keyIterator.k--
+        }
+      } else {
+        if(value <= limit) {
+          times.push(prop.keyTime(key));
+          greatThanZero = true
+        }
+      }
+    })
+    $.writeln('Times calculated')
+    return times
+
+  },
+
+
+);

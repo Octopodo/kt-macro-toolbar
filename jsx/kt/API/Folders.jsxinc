@@ -1,0 +1,16 @@
+(function() {
+
+
+function Folders () {}
+
+Folders.prototype = {
+  init: function() {
+    var folders = Array.prototype.slice.call(arguments)
+    return KT.Project.getFolders(folders)
+  }
+}
+
+KT.Folders = KT.ExtendArray(Folders);
+
+})();
+

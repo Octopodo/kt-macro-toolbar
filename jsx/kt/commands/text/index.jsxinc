@@ -1,0 +1,3 @@
+KT.Commands.Text = {};
+
+#include "generate-text-from-csv.jsxinc"

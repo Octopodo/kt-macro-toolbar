@@ -1,0 +1,64 @@
+(function(){
+
+KT.Spell('ABCGenerator',
+  function (options) {
+    app.beginUndoGroup('Generate Comped Alphabet');
+    var alphabet, letter, commandOpts, comp, comps, cm, textLayer, sourceText;
+    cm = KT.cast('CompManager');
+    comps = [];
+    options = KT.cast('CommandConfig').Options(options);
+    commandOpts = (options.commandOpts) ? {
+      nest: options.commandOpts.nest ||false,
+      caps: options.commandOpts.caps || false,
+      fit: options.commandOpts.fit || false,
+      props: options.commandOpts.props || {}
+    } : {
+      caps: false,
+      fit: false,
+      props: {},
+      nest: false
+    }
+  
+    KT.merge(commandOpts, options.commandOpts)
+    alphabet = this.generateAlphabet(options.commandOpts.caps);
+  
+    for(var i = 0, l = alphabet.length; i < l; i++) {
+      letter = alphabet[i];
+      options.comp.settings.name = letter;
+      comp = cm.createComp(options);
+      textLayer = comp.layers.addText(letter);
+      sourceText = textLayer.property('ADBE Text Properties').property('ADBE Text Document').value;
+      KT.mergeAeOptions(options.commandOpts.props, sourceText);
+      textLayer.property("Source Text").setValue(sourceText)
+      comps.push(comp);
+      if(options.commandOpts.fit) {
+        cm.fitCompsToContent([comp], options)
+      }
+    }
+  
+    if(options.commandOpts.nest) {
+      options.comp.settings.name = 'Alphabet';
+      options.comp.settings.folder = false;
+      comp = cm.createComp(options);
+      for(var i =  comps.length-1, l = 0; i >= l; i--) {
+        textLayer = comp.layers.add(comps[i]);
+        KT.mergeAeOptions(options.layer.props, textLayer)
+      }
+    }
+  
+    app.endUndoGroup()
+    return comps
+  },
+  function generateAlphabet(caps){
+    var alphabet, start, end;
+    alphabet = [];
+    start = (caps) ? 65 : 97;
+    end = (caps) ? 91 : 123;
+    for(var i = start; i < end; i++) {
+      alphabet.push(String.fromCharCode(i))
+    }
+    return alphabet
+  }
+)
+
+})();

@@ -1,0 +1,37 @@
+(function(){
+
+var superClass = KT.Components.Component;
+
+function ItemComponent(params) {
+  params.type = 'Item'
+  superClass.call(this, params)
+}
+KT.Extend(ItemComponent, superClass);
+
+superClass = ItemComponent;
+
+
+function FolderComponent(params) {
+  params.type = 'Folder'
+  params.components = this.getSource().items;
+  superClass.call(this, params)
+}
+KT.Extend(FolderComponent, superClass);
+
+
+
+function FootageComponent(params) {
+  params.type = 'Footage'
+  superClass.call(this, params)
+}
+KT.Extend(FootageComponent, superClass);
+
+
+
+function CompComponent(params) {
+  params.type = 'Comp'
+  superClass.call(this, params)
+}
+KT.Extend(FootageComponent, superClass);
+
+})();

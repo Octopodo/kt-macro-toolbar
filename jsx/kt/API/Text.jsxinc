@@ -1,0 +1,59 @@
+(function(){
+
+function getTextLayers(comp){
+  if(!_.isComp(comp)) { return }
+  var textLayers = KT.Layers({
+    source: comp,
+    texts: true
+  }) || [];
+  return textLayers
+}
+
+function setProperties(layer, opts) {
+  if(!_.isTextLayer(layer)) { return }
+  var layerValue = layer.property('ADBE Text Properties').property('ADBE Text Document');
+      textDocument = layerValue.value,
+      // newValue = new TextDocument(textDocument.value),
+      keys = _.intersection(_.keys(opts), _.keys(textDocument))
+  _.each(keys, function(key){
+    try {
+      textDocument[key] = opts[key]
+    } catch (e) {
+      $.writeln(e)
+    }
+  })
+  layerValue.setValue (textDocument)
+  var stop = 0;
+}
+
+function setMultiProperties(comps, opts) {
+  if(!_.isArray(comps) && !_.isComp(comps)) { return }
+  var comps = !_.isArray(comps) ? [comps] : comps,
+      layers, layer;
+
+  _.each(comps, function(comp) {
+    layers = getTextLayers(comp);
+    _.each(layers, function(layer) {
+      setProperties(layer, opts)
+    })
+  })
+}
+
+function addText(comp, opts) {
+  if(!_.isComp(comp)) { return }
+  var opts = opts || {},
+      textLayer;
+
+  opts.text = _.isString(opts.text) ? opts.text : '';
+  textLayer = comp.layers.addText();
+  setProperties(textLayer, opts);
+  return textLayer
+}
+
+KT.Text = {
+  add: addText,
+  getTextLayers: getTextLayers,
+  set: setMultiProperties
+}
+
+})();

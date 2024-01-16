@@ -1,0 +1,40 @@
+(function(){
+
+KT.Spell("ImgToBin",
+    function()
+    {
+        var imgFolder = new Folder(env.path.icons);
+        var saveFolder =  new Folder (env.path.binIcons);
+
+        if(!imgFolder || !saveFolder) {return}
+
+        var includeFile = new File(env.path.bin + "/binIcons.jsxinc");
+        var fileOK = includeFile.open('w');
+        if (fileOK == false) {return}
+        var content = ""
+        
+        function convert(item) {
+
+            if(item.name.match(env.extensions.img) != null) {
+                var varName = KT.stripFileExtension(item.name)
+                var fileName = saveFolder.fullName + "/" + item.name + "." + env.extensions.inc;
+                var binObj = DuAEF.DuBinary.toObj(item);
+                var binFile = new DuBinaryFile(binObj.binAsString, varName);
+                content = '(function(){\n  KT.icons.'+varName+' = new DuBinaryFile("'+binObj.binAsString +'","'+varName+'");\n})();';
+                KT.writeFile(content, fileName);
+
+                includeFile.writeln("#include \"icons/" + item.name + "." + env.extensions.inc + "\"");
+            }
+        }
+
+
+        imgFolder.getFiles(convert);
+
+        alert("Icons converted");
+        
+
+        includeFile.close(); 
+    }
+)
+
+})();

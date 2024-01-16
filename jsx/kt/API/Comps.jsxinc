@@ -1,0 +1,76 @@
+(function(){
+
+
+function addSolid() {
+  var args = arguments,
+      comp = _.isComp(args[0]) ? args[0] : app.project.activeItem;
+
+  if(!comp || !_.isComp(comp)) return;
+
+  var color = _.isArray(args[1]) ? args[1] : [0, 0, 0] , 
+      name = _.isString(args[2]) ? args[2] : 'Solid' ,
+      width = _.isNumber(width) ? width : comp.width,
+      height = _.isNumber(height) ? height : comp.height,
+      par = _.isNumber(par) ? par : comp.pixelAspect,
+      duration = _.isNumber(duration) ? duration : comp.duration;
+
+  color[0] = color[0]/255;
+  color[1] = color[1]/255;
+  color[2] = color[2]/255;
+  
+  solid = comp.layers.addSolid(color, name, width, height, par, duration);
+  return solid
+}
+
+function fitCompToContent(comp, margins) {
+  if(!(_.isComp(comp))) return;
+
+  var layers = KT.Layers({source: comp}),
+      bounds = layers.getBounds(),
+      margins = margins ? {
+        x: _.isNumber(margins.x) ? margins.x : 0,
+        y: _.isNumber(margins.y) ? margins.y : 0,
+      } : {x: 0, y: 0},
+      width = Math.ceil(Math.abs(bounds.left - bounds.right + margins.x)),
+      height = Math.ceil(Math.abs(bounds.top - bounds.bottom + margins.y)),
+      offset = {
+        x: width / 2 - (width / 2 + bounds.left + margins.x/2),
+        y: height / 2 - (height / 2 + bounds.top - margins.y/2)
+      }
+  
+  comp.width = _.filterSize(width);
+  comp.height = _.filterSize(height);
+  layers.offsetPosition(offset)
+}
+
+function fitContentToComp(comp, margind) {
+  
+
+}
+
+function Comps(comps) {}
+
+function init(comps) {
+  return KT.Project.getComps(comps);
+}
+
+Comps.prototype = {
+  init: function() {
+    var comps = Array.prototype.slice.call(arguments)
+    return init.call(this, comps)
+  },
+  fitToContent: function(margins) {
+    for(var i = 0, len = this.length; i < len; i++){
+      fitCompToContent(this[i], margins)
+    }
+  }
+}
+
+
+
+
+
+KT.Comps = KT.ExtendArray(Comps);
+
+var stop=0;
+})();

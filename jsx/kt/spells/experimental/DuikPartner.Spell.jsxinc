@@ -1,0 +1,280 @@
+KT.Spell('DuikPartner', 
+  function renameDuikBones(comp){
+    var layer;
+    var comp = comp || app.project.activeItem;
+    if(!comp || !(comp instanceof CompItem)) {
+      return
+    }
+    var isRight = true;
+    var newName = '';
+    var structMatch = /S\s\|/g;
+    var partMatch = /foot|calf|thigh|hand|forearm|arm|tiptoe/gi
+    var removeMatch = /tip|heel|toes/gi;
+    var spineMatch = /Spine/gi;
+    var sideMatch = /2/g;
+    var layers = KT.collectionToArray(comp.layers);
+
+    for(var i = 0; i < layers.length; i++){
+      layer = layers[i];
+      newName = layer.name;
+      if(removeMatch.test(layer.name)) {
+        layer.remove();
+        continue
+      }
+      layer.name.replace(structMatch, function(){
+        layer.name.replace(partMatch, function(){
+          layer.name.replace(sideMatch, function(match){
+            isRight = false;
+            newName = layer.name.replace(match, '')
+          });
+          layer.name = (isRight) ? newName + ' R' : newName + 'L';
+          isRight = true
+        });
+        layer.name.replace(spineMatch, function(match) {
+          layer.name = (match == 'Spine 2')? layer.name.replace('Spine 2', 'Chest') : layer.name = layer.name.replace('Spine', 'Belly')
+        })
+      })
+    }
+  },
+
+  function adjustBones(comp) {
+    var comp = comp || app.project.activeItem;
+    if(!comp || !(comp instanceof CompItem)) {
+      return
+    }
+    var arms = ['Arm', 'Forearm', 'Hand'];
+    var legs = ['Thigh', 'Calf', 'Foot'];
+    var body = ['Hips', 'Spine', 'Spine 2', 'Neck', 'Head']
+    this.adjustSidedBones(comp, 'R', arms);
+    this.adjustSidedBones(comp, 'L', arms);
+    this.adjustSidedBones(comp, 'R', legs);
+    this.adjustSidedBones(comp, 'L', legs);
+    this.adjustBodyBones(comp, body)
+  },
+
+  function adjustBodyBones(comp, parts){
+    var position, boneLayer, layer, parentPosition, part;
+    var layers = comp.layers;
+    var prefix = comp.name.split('_')[0];
+    for(var i = 0, l = parts.length; i < l; i++) {
+      part = parts[i]
+      layer = layers.byName( part.toLowerCase());
+      boneLayer = layers.byName('S | ' + part);
+      if (i == 0) {
+        position = parentPosition = layer.property('ADBE Transform Group').property('ADBE Position').value;
+        boneLayer.property('ADBE Transform Group').property('ADBE Position').setValue(position)  
+      } else {
+        if(layer == null) {
+          parentPosition += boneLayer.property('ADBE Transform Group').property('ADBE Position').value;
+          continue 
+        } else {
+          position = layer.property('ADBE Transform Group').property('ADBE Position').value  - parentPosition;
+          boneLayer.property('ADBE Transform Group').property('ADBE Position').setValue(position);
+          parentPosition += position
+        }
+      }
+        
+    }
+  },
+  function adjustSidedBones(comp, side, parts) {
+    var layer, boneLayer, position, part, parentPosition;
+    var comp = comp || app.project.activeItem;
+    if(!comp || !(comp instanceof CompItem)) {
+      return
+    }
+    var layers = comp.layers;
+    var prefix = comp.name.split('_')[0];
+    //Arm
+    for(var i = 0, l = parts.length; i < l; i++ ) {
+      part = parts[i];
+      layer = layers.byName(part.toLowerCase() +'_' + side.toUpperCase());
+      boneLayer = layers.byName('S | '+part+' ' + side.toUpperCase());
+      if(i > 0){
+        position = layer.property('ADBE Transform Group').property('ADBE Position').value - parentPosition;
+        boneLayer.property('ADBE Transform Group').property('ADBE Position').setValue(position);
+        parentPosition += position
+      } else {
+        position = parentPosition = layer.property('ADBE Transform Group').property('ADBE Position').value;
+        boneLayer.property('ADBE Transform Group').property('ADBE Position').setValue(position);
+      }
+    }
+  }, 
+  function parentLayers(comp) {
+    var layer, parentLayer;
+    var comp = comp || app.project.activeItem;
+    if(!comp || !(comp instanceof CompItem)) {
+      return
+    }
+    var sideParts = ['Arm', 'Forearm', 'Hand', 'Thigh', 'Calf', 'Foot'];
+    var bodyParts = ['Hips', 'Neck', 'Head'];
+    this.parentLayerParts(comp, 'L', sideParts);
+    this.parentLayerParts(comp, 'R', sideParts);
+    this.parentLayerParts(comp, null, bodyParts);
+  }, 
+  function parentLayerParts(comp, side, parts) {
+    var layer, part, parentLayer;
+    var layers = comp.layers;
+    var prefix = comp.name.split('_')[0];
+    var layerSide = (side) ? '_' + side.toUpperCase(): '';
+    var parentSide = (side) ? ' ' + side.toUpperCase(): '';
+    for(var i = 0, l = parts.length; i < l; i++) {
+      part = parts[i];
+      parentLayer = layers.byName('S | ' + part + parentSide);
+      layer = layers.byName(part.toLowerCase() +  layerSide);
+      if(layer != null) {
+        layer.parent = parentLayer
+      } 
+    }
+  },
+
+
+  //RIG REPLACEMENT
+
+  function getCharacterData(constant){
+    var dataComp = KT.findItem('__CHARACTER_DATA__');
+    var dataLayer = dataComp.layers.byName('PREFIX');
+    var data = dataLayer.property('Source Text').value;
+    return data.text
+  },
+  function setCharacterData(constant, value){
+    var dataComp = KT.findItem('__CHARACTER_DATA__');
+    var dataLayer = dataComp.layers.byName('PREFIX');
+    var sourceText = dataLayer.property('Source Text')
+    var dataDocument = sourceText.value;
+    dataDocument.text = value;
+    sourceText.setValue(dataDocument)
+  },
+
+  function replaceCharacter(){
+    var match, name, headComps, bodyComps, comps;
+    var _self = this;
+    var folder = KT.selectFolderDialog();
+    if(!folder) {
+      return
+    }
+    var sequenceMatch = /\.kts/g;
+    var pngMatch = /\.png/g;
+    var files = folder.getFiles()
+    var newPrefix = KT.getPrefix(files[0].name, '_');
+    var oldPrefix = 'AF';
+    var options = KT.cast('CommandConfig').Options({
+      time: {
+        singleTime: true
+      },
+      commandOpts: {
+        newPrefix: KT.getPrefix(files[0].name, '_'),
+        oldPrefix: this.getCharacterData('PREFIX')
+      },
+      layer: {
+        skipParented: true
+      }
+    })
+    KT.walkFolder(folder, false, function(item){
+      name = File.decode(item.name);
+      name.replace(sequenceMatch, function(match) {
+        //TODO
+        _self.replaceSequence(item, options);
+      });
+      name.replace(pngMatch, function(){
+        //TODO
+        _self.replaceImage(item, options)
+      })
+    })
+    comps = this.getCharacterComps(oldPrefix, newPrefix);
+    this.renameComps(comps, oldPrefix, newPrefix);
+    // this.fixExpressions(comps, oldPrefix, newPrefix);
+    // options.layer.filters = ['guideLayer'];
+    bodyComps = KT.collectionToArray(KT.getProjectItem('_Parts/COMPS/body').items);
+    headComps = KT.collectionToArray(KT.getProjectItem('_Parts/COMPS/head').items);
+    headComps.push(KT.findItem(newPrefix + '_head_front', [CompItem]))
+    headComps.push(KT.findItem(newPrefix + '_head_left', [CompItem]))
+    headComps.push(KT.findItem(newPrefix + '_head_right', [CompItem]))
+    KT.cast('CompManager').fitCompsToContent(headComps, options);
+    KT.cast('CompManager').fitCompsToContent(bodyComps, options);
+    if(oldPrefix != newPrefix) {
+      this.setCharacterData('PREFIX', newPrefix)
+    }
+  },
+
+  function replaceImage(src, options) {
+    var comps;
+    var name = File.decode(src.name);
+    var oldPrefix = options.commandOpts.oldPrefix;
+    var newPrefix = options.commandOpts.newPrefix;
+    var oldName = name.replace(newPrefix, oldPrefix);
+    var footage = KT.findItem(oldName, [FootageItem]);
+    if(!footage) {
+      return
+    }
+    footage.replace(src);
+  },
+  function replaceSequence(src, options) {
+    var comps, layer, properties;
+    var name = File.decode(src.name);
+    var oldPrefix = options.commandOpts.oldPrefix;
+    var newPrefix = options.commandOpts.newPrefix;
+    var extension = '\.png'
+    var oldName = name.replace(newPrefix, oldPrefix).replace('.kts', '');
+    var footage = KT.findItem(oldName, [FootageItem], null, function(item){
+      var match = new RegExp(oldName + '.*' + extension);
+      var matchItem;
+      item.name.replace(match, function() {
+        matchItem = item;
+      })
+      if(matchItem != null) {
+        return item
+      }
+    });
+    var item = src.getFiles("*.png")[0];
+    footage.replaceWithSequence(item, true);
+  },
+  function getCharacterComps(match) {
+    var comps = [];
+    var items = KT.collectionToArray(app.project.items);
+    var match = new RegExp(match)
+    var comp;
+    for(var i = 0, l = items.length; i < l; i++) {
+      comp = items[i];
+      if(comp instanceof CompItem && match.test(comp.name)) {
+        comps.push(comp)
+      }
+    }
+    return comps
+  },
+  function renameComps(comps, oldPrefix, newPrefix) {
+    var comp;
+    var match = new RegExp(oldPrefix);
+    for(var i = 0, l = comps.length; i < l; i++) {
+      comp = comps[i];
+      comp.name = comp.name.replace(oldPrefix, newPrefix);
+    }
+  },
+  function fixExpressions (comps, oldPrefix, newPrefix){
+    var lockedLayer = false;
+    var options = KT.cast('CommandConfig').Options({
+      commandOpts: {
+        replace: oldPrefix,
+        replacer: newPrefix
+      },
+      properties: {
+        filters: ['expressionError']
+      }
+    })
+    // var comps = KT.cast('CompManager', 'getComps', options);
+    for(var i = 0, l = comps.length; i < l; i++) {
+      for(var layerIndex = 1, length = comps[i].layers.length; layerIndex <= length; layerIndex++) {
+        layer = comps[i].layers[layerIndex];
+        lockedLayer = layer.locked;
+        if(lockedLayer) {
+          layer.locked = false;
+        }
+        // if(layer.index == 44) {$.bp()}
+        KT.cast('PropertyManager', 'fixExpressions', layer, options);
+        if(lockedLayer) {
+          layerLocked = true
+        }
+      }
+    }
+  }
+
+)

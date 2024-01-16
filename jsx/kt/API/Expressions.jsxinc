@@ -1,0 +1,53 @@
+(function() {
+
+var DATA_LAYER_COMP_PATH = 'KT//__Data__//__DATA__COMP',
+    DATA_LAYER_NAME = 'KT_Data_'
+
+KT.Expressions
+
+var expressions = {};
+
+
+expressions.getBounds = function (time, comp, layer) {
+  if(!_.isComp(comp) ||!_.isLayer(layer)) {
+    return ''
+  }
+
+  function getBounds(time, compName, layerName) {
+    s = comp(compName).layer(layerName);
+    b = s.sourceRectAtTime(time, false);
+    lt = s.toWorld([b.left, b.top], time);
+    lb = s.toWorld([b.left, b.top + b.height], time);
+    rt = s.toWorld([b.left + b.width, b.top], time);
+    rb = s.toWorld([b.left + b.width, b.top + b.height], time);
+    return '{ "left":' + lt[0] + ', "top":' + lt[1] + ',"right":' + rb[0] + ',"bottom":' + rb[1] +'}';
+  }
+
+  return getBounds.toString() + '; getBounds('+time+', "' +comp.name +'", "' + layer.name +'");' 
+
+}
+
+
+
+KT.Expressions = function() {
+  var stack = []
+  var dataLayer = undefined;
+
+
+  //
+  this.add = function() {
+    var property = arguments[0],
+        name = arguments[1],
+        args = Array.prototype.slice.call(arguments, 2);
+
+    if(!_.isProperty(property) || !property.canSetExpression) { return property }
+
+    var exp = expressions[name].apply(null, args);
+    property.expression = exp;
+    return property;
+  }
+}
+
+KT.Expressions = new KT.Expressions()
+
+})();

@@ -1,0 +1,2 @@
+"use strict"if (typeof exports === 'undefined') { var exports = {}; };const e=typeof cep_node !== 'undefined'?cep_node.require(cep_node.global["__dir"+"name"] + "/assets/bolt-fa0700cc.js"):require("../assets/bolt-fa0700cc.js"),o=e.defineComponent({__name:"main",setup(p){return(a,r)=>{const n=e.resolveComponent("v-app");return e.openBlock(),e.createBlock(n,null,{default:e.withCtx(()=>[e.createTextVNode(" Second Wondow ")]),_:1})}}}),c=e.createPinia();e.initBolt();const t=e.createApp(o);t.use(c);t.mount("#root");
+//# sourceMappingURL=img-browser-d348865d.js.map

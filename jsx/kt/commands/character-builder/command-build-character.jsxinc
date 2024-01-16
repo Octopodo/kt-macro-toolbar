@@ -1,0 +1,13 @@
+(function(){
+
+function BuildCharacter(sceneName) {
+  var character = KT.Commands.ImportFlashScene(sceneName);
+
+  character.algorithm('Flash: Build Assets');
+  character.algorithm('Flash: Place Assets');
+
+}
+
+KT.Commands.BuildCharacter = BuildCharacter;
+
+})();

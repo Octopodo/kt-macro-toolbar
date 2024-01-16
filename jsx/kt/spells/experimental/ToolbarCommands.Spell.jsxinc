@@ -1,0 +1,101 @@
+
+KT.Spell('ToolbarCommands',
+
+  // function forEach(arr, options, callback){
+  //   for(var i = 0, l = arr.length; i < l; i++) {
+  //     callback(arr[i], options);
+  //   }
+  // },
+
+  function compCreate(options){
+    options.comp.settings.open = true;
+    return KT.cast('CompManager').createComp(options);
+  },
+  function compAddNull(options) {
+    var comp = app.project.activeItem;
+    KT.cast('CompManager').addNull([comp])
+  },
+  function compAddSolid(options) {
+    var comp = [app.project.activeItem];
+    KT.cast('CompManager').addSolid(comp, options)
+  },
+  // function compFitToContent(options) {
+
+  // },
+  // function compFitContent(options) {
+
+  // },
+  // function expressionsSwitch(options) {
+
+  // },
+  // function expressionsBake(options){
+
+  // },
+  function keysBackward(options){
+    var comp = app.project.activeItem;
+    if(!(comp instanceof CompItem)){
+      return
+    }
+    options.time.units = 'f';
+    options.properties.keys.offset = -1 * comp.frameDuration;
+    this.offsetLayerKeys( comp, options);
+  },
+  function keysForward(options){
+    var comp = app.project.activeItem;
+    if(!(comp instanceof CompItem)){
+      return
+    }
+    options.time.units = 'f';
+    options.properties.keys.offset = 1 * comp.frameDuration;
+    this.offsetLayerKeys( comp, options);
+  },
+  function keysFastBackward(options){
+    var comp = app.project.activeItem;
+    if(!(comp instanceof CompItem)){
+      return
+    }
+    options.time.units = 'f';
+    options.properties.keys.offset = -options.properties.keys.offset * comp.frameDuration;
+    this.offsetLayerKeys( comp, options);
+  },
+  function keysFastForward(options){
+    var comp = app.project.activeItem;
+    if(!(comp instanceof CompItem)){
+      return
+    }
+    options.time.units = 'f';
+    options.properties.keys.offset = options.properties.keys.offset * comp.frameDuration;
+    var layers = KT.cast('LayerManager', 'offsetLayerKeys', comp, options);
+  },
+
+  // function openSettingsWindow(options){
+
+  // },
+
+  function offsetLayerKeys(comp, options){
+    if(!comp || !options) {
+      return
+    }
+    if(options.properties.keys.selected){
+      this.ofsetLayersSelectedKeys(comp, options)
+      return
+    }
+    KT.cast('LayerManager', 'offsetLayerKeys', comp, options);
+
+  },
+  // function offsetLayerSelectedKeys(comp, options){
+  //   var pm = KT.cast('PropertyManager');
+  //   var layers = KT.cast('LayerManager', 'getLayers', comp, options);
+  //   var keyedProps = [];
+  //   var keyedData;
+  //   for (let i = 0; i < layers.length; i++) {
+  //     keyedData = { layer: layers[i], properties: []};
+  //     var properties = KT.cast('PropertyManager', 'getProperties', keyedData.layer, options);
+  //     for(var p = 0, pl = properties.length; p < pl; p++) {
+  //       crawl(properties, options, function(property, options, keyIterator){
+  //         keyedData.properties.push(pm.copyKey);
+  //       })
+  //     }
+  //   }
+  // }
+)

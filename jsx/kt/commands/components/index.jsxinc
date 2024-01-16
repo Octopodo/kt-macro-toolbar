@@ -1,0 +1,3 @@
+KT.Components.Flash = {};
+#include "FlashComponentFactory.jsxinc"
+#include "FlashComponent.jsxinc"

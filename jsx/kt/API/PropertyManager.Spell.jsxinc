@@ -1,0 +1,557 @@
+
+(function(){
+/**
+ * @namespace PropertyManager
+ */
+KT.Spell("PropertyManager",
+
+  /** Main method for command call on PropertyManager. This method sets an options object and filters the the properties to work on
+     * @function _cast
+     * @memberof PropertyManager
+     * @param {String} call - The command to call.
+     * @param {Layer} layer -The layer wher to perform property operations
+     * @param {Options} options - An Options object.
+     * @returns Whatever the called command returns.
+     */
+  function(call, layer, options){
+    if(!call) {
+      return this
+    }
+    this.noSelectedKeys = true;
+    this.markers = null
+    var options = KT.cast('CommandConfig').Options(options);
+    var properties = this.getProperties(layer, options);
+    // if(options.properties.keys.selected && this.noSelectedKeys){
+    //   options.properties.keys.selected = false;
+    //   options.properties.keyed = true;
+    //   options.properties.selected = true;
+    //   properties = this.getProperties(layer, options)
+    // }
+    // if(this.markers != null) {
+    //   properties.push(this.markers)
+    // }
+    if(call == 'getProperties') {
+      return properties
+    }
+    if (!this[call]) {
+      return call + ' command doesn\'t exist.'
+    }
+    if (options.fromCEP) {
+      return JSON.stringify(this[call](properties, options));
+    } else {
+      return this[call](properties, options)
+    }
+  },
+
+  /**Filters and retrieves layer properties.
+   * @function getProperties
+   * @memberof PropertyManager
+   * @param {Layer|PropertyGroup} parent - A layer or property group.
+   * @param {Options} options - An Options object.
+   * @param {Property[]} [store=[]]
+   * @returns {Property[]} An array with selected properties. 
+   */
+  function getProperties(parent, options, store) {
+    var property, selected;
+    var store = store || [];
+    if(parent.matchName == 'ADBE Time Remap') {$.bp()}
+    // if(options.properties.keys.markers && parent instanceof AVLayer) {
+    //   this.markers = parent.property("ADBE Marker");
+    // }
+    if (options.properties.selected) {
+      selected = parent.selectedProperties || store
+      for(var i = 0, l = selected.length; i < l; i++) {
+        property = this.filterProperty(selected[i], options.properties);
+        if(!property) {
+          continue
+        }
+        store.push(property)
+      }
+    } else if(options.properties.transformGroup){
+      store = this.getTransformProperties(parent, options.properties)
+    } else {
+      for(var i = 1, l = parent.numProperties; i <= l; i++) {
+        property = parent.property(i);
+        if(property.propertyType === PropertyType.INDEXED_GROUP 
+          || property.propertyType === PropertyType.NAMED_GROUP ) {
+          this.getProperties(property, options, store);
+          continue
+        } 
+        property = this.filterProperty(property, options.properties);
+        if(!property) {
+          continue
+        }
+        store.push(property)
+      }
+    }
+    
+    return store
+  },
+
+  /**Filter a property based on pased filters. I t filter by name or by keys or expressions.
+   * @function filterProperty
+   * @memberof PropertyManager
+   * @param {Property} property - The property to filter
+   * @param {Options.properties} options - An Options.properties object containing the filters and the options
+   * @returns {Property|null} The property if passed the filter check
+  */
+  function filterProperty (property, options) {
+    var prop;
+    if(!(property instanceof PropertyGroup)) {
+      var filters = new RegExp (options.filters.join('|'), 'gi');
+      property.matchName.replace(filters, function(){
+        prop = property
+      });
+      
+      if(prop) {
+        return prop
+      }
+
+      if(options.filters.length > 0){
+        var filter;
+        for (var i = 0, l = options.filters.length; i < l; i++) {
+          filter = options.filters[i];
+          if(property[filter]) {
+            return property
+          }
+        }
+      }
+
+      if(options.keyed) {
+        if(options.coded) {
+          if(property.isTimeVarying) {
+            return property
+          }
+        } else {
+          if(property.numKeys > 0) {
+            if(options.keys.selected) {
+              if(property.selectedKeys > 0) {
+                this.noSelectedKeys = false;
+                return property
+              }
+            } else {
+              return property
+            }
+          }
+        }
+      } 
+    }
+  },
+
+  /** Retrieves the transform keyed spatial properties Anchor Point,  Position, Rotation and Scale
+   * @function 
+   * @instance
+   * @name getTransformProperties
+   * @memberof PropertyManager
+   * @param {Layer} layer - The layer to inspect
+   * @returns {String[]} An array containing the keyed properties.(Without 'ADBE')
+   */
+  function getTransformProperties(layer, options) {
+    var prop, push;
+    var props = [];
+    var transformProps = [
+      'Anchor Point',
+      'Position',
+      'Scale',
+      'Rotate X',
+      'Rotate Y',
+      'Rotate Z',
+      'Orientation'
+    ]
+    for (var i = 0, l = transformProps.length; i < l; i++) {
+      prop = this.filterProperty(layer.property('ADBE Transform Group').property('ADBE ' + transformProps[i]), options);
+      if(!prop) {
+        continue
+      }
+      props.push(prop)
+    }
+    return props
+  },
+  function getLayer(property) {
+    if(!property || !(property instanceof Property)) {
+      return
+    }
+    var parent = property.parentProperty;
+    while(parent.parentProperty){
+      parent = parent.parentProperty
+    }
+    return parent
+  },
+
+  /** Offsets a transform property of the passed layers
+   * @function
+   * @instance
+   * @name offsetProperty
+   * @memberof PropertyManager
+   * @param {Layer|Layer[]|LayerCollection} layers - A layer, array or collection of layers.
+   */
+  function offsetProperty(property, offset) {
+    var value, parent;
+    var property = (property instanceof Array) ? property[0] : property;
+    var hasKeys = property.numKeys > 1;
+    var isSeparated = property.dimensionsSeparated;
+    if(isSeparated) {
+      var x = property.getSeparationFollower(0);
+      var y = property.getSeparationFollower(1);
+      var z = property.getSeparationFollower(2);
+
+      this.offsetProperty(x, offset[0])
+      this.offsetProperty(y, offset[1])
+      this.offsetProperty(z, offset[2])
+
+      return
+    }
+    if(offset == 0 || !offset) {
+      return
+    }
+    if (!hasKeys) {
+      value = property.value + offset;
+      property.setValue(value)
+    } else {
+      for (var k = 1, kl = property.numKeys; k <= kl; k++) {
+        value = property.keyValue(k) + offset;
+         property.setValueAtKey(k, value)
+      }
+    }
+  },
+
+  function offsetProperties(properties, options) {
+    for(var i = 0, l = properties.length; i < l; i++) {
+      this.offsetProperty(properties[i], options.commandOpts.offset)
+    }
+  },
+
+
+  
+
+  function layerHasKeys(properties) {
+    var keyed = false;
+    for(var i = 0, l = properties.length; i < l ; i++) {
+      if(properties[i].isTimeVarying){
+        keyed = true;
+        break
+      }
+    }
+    return keyed
+  },
+
+  function getAnimatedProperties(properties, filterExpressions, objMode) {
+    var property, propName;
+    var keyed = [];
+    if(objMode) {
+      keyed = {};
+      for(var i = 0, l = properties.length; i < l; i++) {
+        property = properties[i];
+        propName = property.matchName.replace(/\s/g, '');
+        if(filterExpressions) {
+          if(property.isTimeVarying && property.numKeys > 1) {
+            keyed[propName] = property;
+          }
+        } else {
+          if(property.isTimeVarying) {
+            keyed[propName] = property;
+          }
+        }
+      }
+      return keyed
+    }
+
+    for(var i = 0, l = properties.length; i < l; i++){
+      property = properties[i];
+      if(filterExpressions) {
+        if(property.isTimeVarying && property.numKeys > 1) {
+          properties.push(property)
+        }
+      } else {
+        if(property.isTimeVarying) {
+          properties.push(property)
+        }
+      }
+    }
+
+    return properties
+  },
+  function copyKey(property, options, keyIterator){
+    var keyIndex = keyIterator.k;
+    var keyData = {
+      index:                keyIndex,
+      time:                 property.keyTime(keyIndex),
+      inInterpolationType:  property.keyInInterpolationType(keyIndex),
+      outInterpolationType: property.keyOutInterpolationType(keyIndex),
+      isSpatial:            property.isSpatial, 
+      twoD:                 property.propertyValueType == PropertyValueType.ThreeD_SPATIAL,
+      threeD:               property.propertyValueType == PropertyValueType.TwoD_SPATIAL,
+      temporalAutoBezier:   property.keyTemporalAutoBezier(keyIndex),
+      temporalContBezier:   property.keyTemporalAutoBezier(keyIndex),
+      inTemporalEase:       property.keyInTemporalEase(keyIndex),
+      outTemporalEase:      property.keyOutTemporalEase(keyIndex),
+      spatialAutoBezier:    property.keySpatialAutoBezier(keyIndex),
+      spatialContinuous:    property.keySpatialContinuous(keyIndex),
+      inSpatialTangent:     property.keyInSpatialTangent(keyIndex),
+      outSpatialTangent:    property.keyOutSpatialTangent(keyIndex),
+      roving:               property.keyRoving(keyIndex),
+      value:                property.keyValue(keyIndex)
+    }
+    
+    return keyData
+  },
+
+  function pasteKey(property, options, keyData){
+    var frameDuration = (options.interval.frameDuration) ? options.interval.frameDuration : this.getLayer(property).containingComp.frameDuration;
+    var units = options.time.units;
+    var offset = options.properties.keys.offset;
+    var newTime = options.time.value + offset; 
+    
+    var keyIndex = property.addKey(newTime);
+    property.setValueAtKey(keyIndex, keyData.value);
+    property.setTemporalEaseAtKey(keyIndex, keyData.inTemporalEase, keyData.outTemporalEase);
+    property.setInterpolationTypeAtKey(keyIndex, keyData.inInterpolationType, keyData.outInterpolationType);
+    property.setTemporalAutoBezierAtKey(keyIndex, keyData.temporalAutoBezier);
+    property.setTemporalContinuousAtKey(keyIndex, keyData.temporalContBezier);
+    property.setSpatialAutoBezierAtKey(keyIndex, keyData.spatialAutoBezier);
+    property.setSpatialContinuousAtKey(keyIndex, keyData.spatialContinuous);
+    property.setRovingAtKey(keyIndex, keyData.roving);
+    property.setSpatialTangentsAtKey(keyIndex, keyData.inSpatialTangent, keyData.outSpatialTangent);
+    return keyIndex
+  },
+
+  function removeKey(property, options, keyIndex){
+    property.removeKey(keyIndex)
+  },
+  
+  function removeKeys(property) {
+    for(var i = 1, l = property.numKeys; i < l; i++) {
+      property.removeKey(i)
+    }
+  },
+
+  function offsetKeys(properties, options){
+    var _self = this;
+    if(!options.properties.keyed && !options.properties.markers) {
+      return
+    }
+    if(options.properties.markers){
+      // var markerProp = this.getLayer(properties[0]).property('ADBE Marker')
+      // this.crawl(markerProp, options, this.shiftMarker);
+      alert('offseting Markers')
+    }
+    this.crawl(properties, options, function(property, options, keyIterator){
+      var keyToRemove, leftKey, rightKey;
+      var keyData = _self.copyKey(property, options, keyIterator);
+      
+      leftKey = (keyData.index == 1) ? null: {
+        time: property.keyTime(keyData.index - 1),
+        inTangent: property.keyInSpatialTangent(keyData.index -1),
+        outTangent: property.keyOutSpatialTangent(keyData.index -1)
+      }
+      rightKey = (keyData.index == property.numKeys) ? null: {
+        time: property.keyTime(keyData.index + 1),
+        inTangent: property.keyInSpatialTangent(keyData.index +1),
+        outTangent: property.keyOutSpatialTangent(keyData.index +1)
+      }
+      var keyIndex = _self.pasteKey(property, options, keyData);
+      property.setSelectedAtKey(keyIndex, true);
+      keyToremove = property.nearestKeyIndex(keyData.time);
+      _self.removeKey(property, options, keyToremove);
+
+      if(leftKey != null) {
+        keyIndex = property.nearestKeyIndex(leftKey.time);
+        property.setSpatialTangentsAtKey(keyIndex, leftKey.inTangent, leftKey.outTangent)
+      }
+      
+      if(rightKey != null) {
+        keyIndex = property.nearestKeyIndex(rightKey.time);
+        property.setSpatialTangentsAtKey(keyIndex, rightKey.inTangent, rightKey.outTangent)
+      }
+
+    })
+  },
+
+  function getSelectedKeys(property, options){
+    var keys = [];
+    var unselected = options.properties.keys.unselected;
+    for(var i = 1, l = property.numKeys; i <= l; i++){
+      if((property.keySelected(i) && !unselected) 
+      || (!property.keySelected(i) && unselected)){
+        keys.push({
+          index: i,
+          time: property.keyTime(i)
+        })
+      }
+    }
+    return keys
+  },
+
+  
+
+  function iterateSelectedKeys(property, options, callback) {
+    var key;
+    var keyIterator = {k: 1}
+    var keys = this.getSelectedKeys(property, options);
+    var reverse = options.properties.keys.reveresed = (options.properties.keys.offset >= 0)? true: false;
+    keyIterator.k = (reverse)? keys.length : 1;
+
+    for( keyIterator.k; (reverse) ?  keyIterator.k > 0 : keyIterator.k <= keys.length; (reverse)? keyIterator.k-- :  keyIterator.k++) {
+      key = keys[ keyIterator.k -1]
+      options.time.value = key.time; 
+      var keyIndex = property.nearestKeyIndex(options.time.value); 
+      var isKeySelected = property.keySelected(keyIndex)
+      if((options.time.value < options.interval.start && !options.interval.underclock)
+      || (options.time.value > options.interval.end && !options.interval.overclock)
+      || !isKeySelected) {
+        
+        continue 
+      }
+      keyIndex = {k: key.index}
+      callback(property, options, keyIndex);
+    }
+  },
+
+  function iterateKeys(property, options, callback) {
+    var keyIterator = {k: 1}
+    var reverse = options.properties.keys.reveresed = (options.properties.keys.offset >= 0)? true: false;
+    keyIterator.k = (reverse)? property.numKeys : 1;
+
+    for(keyIterator.k; (reverse) ? keyIterator.k >=1 : keyIterator.k <= property.numKeys; (reverse)?  keyIterator.k-- :  keyIterator.k++) {
+      options.time.value = property.keyTime( keyIterator.k);
+      if((options.time.value < options.interval.start && !options.interval.underclock)
+      || (options.time.value > options.interval.end && !options.interval.overclock) ) {
+        if(options.properties.keys.negativeWalk) {
+          callback(property, options, keyIterator);
+          continue
+        } else {
+          continue
+        }
+      }
+      callback(property, options, keyIterator);
+    }
+  },
+
+
+  function crawl(properties, options, callback) {
+    var property, rate, start, end;
+    var keyIterator = {k: 1}
+    var rate = KT.formatTime(options.commandOpts.rate, 'f', options.interval.frameDuration);
+
+    for(var i = 0, l = properties.length; i < l; i++) {
+      property = properties[i]
+      if(options.time.singleTime) {
+        options.time.value = start;
+        callback(property, options, keyIterator)
+      } else if(!options.properties.keyed && !options.properties.markers) {
+        options.time.value = start;
+        while(options.time.value <= end) {
+          callback(property, options, keyIterator);
+          options.time.value += rate.value
+        }
+      } else if(property.numKeys > 0) {
+        if(options.properties.keys.selected || options.properties.keys.unselected) {
+          this.iterateSelectedKeys(property, options, callback)
+        } else {
+          this.iterateKeys(property, options, callback)
+        }
+        
+      }
+    }
+  },
+
+  function iterateProperties (parent, callback) {
+    var prop, propName;
+    var breaker = false;
+    
+    function iterate(parent, callback) {
+      if(breaker == true) {
+        return
+      }
+      for(var i = 1, l = parent.numProperties; i <= l; i++) {
+        if(breaker == true) {
+          break
+        }
+        var prop = parent.property(i);
+        var propName = prop.matchName.replace(/\s/g, '');
+        if(prop.propertyType === PropertyType.INDEXED_GROUP 
+          || prop.propertyType === PropertyType.NAMED_GROUP ) {
+          iterate(prop, callback)
+        } else {
+          breaker = callback(prop);
+          if(breaker == true) {
+            break
+          }
+        }
+      }
+    }
+    iterate(parent, callback)
+  },
+  function fixExpressions(properties, options) {
+    var property;
+    var replace = new RegExp(options.commandOpts.replace, 'g');
+    var replacer = options.commandOpts.replacer;
+    for(var i = 0, l = properties.length; i < l; i++) {
+      property = properties[i];
+      property.expression = property.expression.replace(replace, replacer);
+      property.expressionEnabled = true;
+    }
+  }
+)
+
+})();
+
+
+
+// function shiftKey(prop, options, keyIterator) {
+//   if(prop.matchName == "ADBE Marker") {
+//     options.commandOpts.markerCallback(prop, options, keyIterator);
+//     return
+//   }
+//   app.beginUndoGroup('Offset Key');
+//   var offset = KT.formatTime(options.properties.keys.offset, options.time.units, options.interval.frameDuration);
+//   var keyIndex = prop.nearestKeyIndex(options.time.value);
+//   var inInterp = prop.keyInInterpolationType(keyIndex);
+//   var outInterp = prop.keyOutInterpolationType(keyIndex);
+//   var keyIndexValue = prop.keyValue(keyIndex);
+  
+  
+//   if ((inInterp === KeyframeInterpolationType.BEZIER) && (outInterp === KeyframeInterpolationType.BEZIER)) {
+//     var tempAutoBezier = prop.keyTemporalAutoBezier(keyIndex);
+//     var tempContBezier = prop.keyTemporalContinuous(keyIndex);
+//   }
+//   if (outInterp !== KeyframeInterpolationType.HOLD) {
+//     var inTempEase = prop.keyInTemporalEase(keyIndex);
+//     var outTempEase = prop.keyOutTemporalEase(keyIndex);
+//   }
+//   if ((prop.propertyValueType === PropertyValueType.TwoD_SPATIAL) || (prop.propertyValueType === PropertyValueType.ThreeD_SPATIAL)) {
+//     var spatAutoBezier = prop.keySpatialAutoBezier(keyIndex);
+//     var spatContBezier = prop.keySpatialContinuous(keyIndex);
+//     var inSpatTangent = prop.keyInSpatialTangent(keyIndex);
+//     var outSpatTangent = prop.keyOutSpatialTangent(keyIndex);
+//     var roving = prop.keyRoving(keyIndex);
+//   }
+  
+//   var newTime = prop.keyTime(keyIndex) + offset;
+//   var newKeyIndex = prop.addKey(newTime);
+//   prop.setValueAtKey(newKeyIndex, keyIndexValue);
+  
+//   if (outInterp !== KeyframeInterpolationType.HOLD) {
+//     prop.setTemporalEaseAtKey(newKeyIndex, inTempEase, outTempEase);
+//   }
+  
+//   prop.setInterpolationTypeAtKey(newKeyIndex, inInterp, outInterp);
+  
+//   if ((inInterp === KeyframeInterpolationType.BEZIER) && (outInterp === KeyframeInterpolationType.BEZIER) && tempContBezier) {
+//     prop.setTemporalContinuousAtKey(newKeyIndex, tempContBezier);
+//     prop.setTemporalAutoBezierAtKey(newKeyIndex, tempAutoBezier);		
+//   }
+
+//   if ((prop.propertyValueType === PropertyValueType.TwoD_SPATIAL) || (prop.propertyValueType === PropertyValueType.ThreeD_SPATIAL)){
+//     prop.setSpatialContinuousAtKey(newKeyIndex, spatContBezier);
+//     prop.setSpatialAutoBezierAtKey(newKeyIndex, spatAutoBezier);
+//     prop.setSpatialTangentsAtKey(newKeyIndex, inSpatTangent, outSpatTangent);
+//     prop.setRovingAtKey(newKeyIndex, roving);
+//   }
+
+//   var keyToRemove = prop.nearestKeyIndex(options.time.value);
+//   keyToRemove = (options.properties.keys.reversed)? keyToRemove: keyToRemove + 1;
+//   prop.removeKey(keyToRemove);
+//   app.endUndoGroup()
+//   return prop.nearestKeyIndex(newTime)
+// },

@@ -1,0 +1,93 @@
+(function(){
+
+var stores = {};
+
+function Store (name) {
+  var state = {}
+  var name = name || 'KT_Store'
+
+  this.get = function(itemName) {
+    return state[itemName]
+  }
+
+  this.set = function(itemName, value) {
+    if(state[itemName] === undefined) {
+      alert(name + "Store item:'" + itemName + "' doesn't exist")
+      return
+    } else if (typeof state[itemName] !== typeof value) {
+      alert("Can't register '" + itemName + "' in " + name +" store because it expects: \n'" + typeof state[itemName] + "' \n not \ '" + typeof value + "'' " )
+      return
+    } else {
+      state[itemName] = value;
+      return state[itemName]
+    }
+    
+  }
+
+  this.exists = function(name) {
+    return state[name] !== undefined
+  }
+
+  this.add = function(name, value) {
+    if(state[value] !== undefined) {
+      alert("Te value '" + name + "' already exists in the" + name + " store, select another name")
+      return
+    } else if(value != undefined){
+      state[name] = value
+      return state[name]
+    }
+  }
+
+  this.delete = function(name) {
+    if(state[name] !== undefined) {
+      delete state[name]
+      return false
+    }
+  }
+
+  this.storeItem = function(itemType, name) {
+    var itemType = _.toClassCase(itemType),
+        typeCheck = "is" + itemType,
+        getType =  "get" + itemType + "s",
+        item = KT.Project[getType](app.project.selection)[0],
+        success = false
+
+    if(!_[typeCheck](item)) {
+      this.delete(name)
+      return success  
+    }
+
+    item = this.add(name, item)
+    success = _[typeCheck](item);
+    return success
+
+  }
+
+  this.list = function() {
+    var propiedades = [];
+    for (var propiedad in state) {
+      propiedades.push(propiedad);
+    }
+    return propiedades;
+  }
+}
+
+
+
+function addStore(name) {
+  if(stores[name] !== undefined) {
+      alert("The store '" + name + "' already exists, select another name")
+      return
+    } else {
+      stores[name] = new Store()
+      return stores[name]
+    }
+}
+
+KT.Store = new Store();
+
+KT.Store.addStore = addStore;
+
+
+})();
+

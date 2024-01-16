@@ -1,0 +1,2 @@
+#include "command-build-character.jsxinc"
+#include "algorithm-character-builder.jsxinc"

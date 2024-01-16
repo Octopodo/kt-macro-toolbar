@@ -1,0 +1,106 @@
+(function() {
+
+
+function BaseOptions(opts, base) {
+  var base = base,
+      options = opts instanceof BaseOptions ? opts.get()
+      :{
+        source: opts.source,
+        store: opts.store ? opts.store : base,
+        callback: _.isFunction(opts.do) ? opts.do : _.toCallback(opts.callback),
+        condition: _.isFunction(opts.check) ?  opts.check : _.toCondition(opts.condition, true)
+      },
+      stack = [options];
+
+  this.print = function() {
+    var out = JSON.stringify(stack, null, 2);
+    $.write(out)
+  }
+
+  this.get = function() {
+    if(arguments.length === 1 && _.isString(arguments[0])) {
+      return stack[stack.length - 1][arguments[0]]
+    } else {
+      return stack[stack.length - 1];
+    }
+  }
+
+  this.extend = function(newOpts) {
+    for(var i in newOpts) {
+      if(!options[i]) {
+        options[i] = newOpts[i]
+      } else if(_.isFunction(newOpts[i]) && _.isFunction(options[i])) {
+        options[i] = function() {
+          return options[i].apply(this, arguments) && newOptions[i].apply(this, arguments) 
+        }
+      }
+    }
+  }
+
+  this.stash = function(newOpts){
+    var newStack = {},
+        i;
+
+    for(i in options) {
+      if(newOpts[i] !== undefined) {
+        if(_.isFunction(newOpts[i]) && _.isFunction(options[i])) {
+          newStack[i] = function() {
+            return options[i].apply(this, arguments) && newOptions[i].apply(this, arguments) 
+          }
+        } else {
+          newStack[i] = newOpts[i]
+        }
+      } else {
+        newStack[i] = options[i]
+      }
+      
+    }
+
+    stack.push(newOpts);
+    return this.get()
+  }
+
+  this.pop = function() {
+    stack.pop();
+    return this.get()
+  }
+
+  this.reset = function(){
+    stack = stack.slice(0, 1)
+    return this.get()
+  }
+
+  this.set = function(hashValues){
+    var i = 0,
+        len = stack.length,
+        opts = this.get(),
+        k;
+
+    for(k in hashValues) {
+      if(opts[k]) {
+        opts[k] = hashValues[k]
+      }
+    }
+  }
+}
+
+
+
+function PropertyOptions (opts) {
+  KT.Options.Base.call(this, opts, []);
+  this.extend( { 
+    selected: _.isBoolean(opts.selected) ? opts.selected : false,
+    keyed: _.isBoolean(opts.keyed) ? opts.keyed : false,
+    transform: _.isBoolean(opts.transform) ? opts.transform : false,
+    spatial: _.isBoolean(opts.spatial) ? opts.spatial : false,
+    fx: _.isBoolean(opts.spatial) ? opts.spatial : false
+  })
+}
+// KT.Extend(PropertyOptions, KT.Options.Base)
+
+
+KT.Options = {};
+KT.Options.Base = BaseOptions;
+
+
+})();

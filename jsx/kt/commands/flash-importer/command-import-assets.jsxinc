@@ -1,0 +1,40 @@
+(function(){
+
+
+function ImportFlashScene(sceneName){
+  KT.Project.save()
+  var path = app.project.file.path 
+        + '/KT_Exports/' 
+        + sceneName + '/' 
+        + sceneName + '.kt.json' ,
+      file = KT.IO.readFile(path),
+      data,
+      component,
+      baseFolder,
+      footageFolder;
+
+  if(!file){
+    file = KT.IO.readFileDialog('Not KT_Exports Folder found');
+    if(!file) {
+      alert("Can't open file or invalid file")
+      return;
+    }
+    
+  }
+  data = JSON.parse(file);
+  component = KT.Components.Flash.create(data);
+
+  baseFolder = KT.Project.addFolder(component.id)
+  footageFolder = KT.Project.addFolder(baseFolder.name + "//Foorage");
+  compsFolder = KT.Project.addFolder(baseFolder.name + "//Comps");
+  KT.Project.moveItemsToPath(this.id, footageFolder, compsFolder);
+  component.addChildren();
+  component.algorithm('Flash: Import Assets', null, footageFolder, compsFolder);
+
+  return component
+  
+}
+
+
+KT.Commands.ImportFlashScene = ImportFlashScene;
+})();

@@ -1,0 +1,12 @@
+var KT = {};
+#include "json2.js"
+#include "underscore.js"
+#include "underscore_plus.jsxinc"
+#include "math.jsxinc"
+#include "patterns.jsxinc"
+#include "algorithm.jsxinc"
+#include "component.jsxinc"
+#include "IO.jsxinc"
+#include "time.jsxinc"
+#include "options.jsxinc"
+

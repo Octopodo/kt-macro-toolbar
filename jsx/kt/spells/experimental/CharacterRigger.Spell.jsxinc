@@ -1,0 +1,733 @@
+/**
+ * @namespace CharacterRigger
+ */
+
+KT.Spell('CharacterRigger',
+  function fitBonesToLayers(){},
+
+  function initDuik() {
+    DuAEF.init("KT_Animation", "1.0.0");
+    DuAEF.enterRunTime();
+  },
+  
+  /**Generates or replaces an existing character
+   *    1- Read data file
+   *    2- Replace or import footage.
+   *    3- For imported footage, create a comp
+   * @function characteryze 
+   */
+
+  function characteryze(options) {
+    var characterData = this.readCharacterData();
+    if(!characterData) {
+      return
+    }
+
+    //Setup
+    var spineVector,  headLayer, hipsPosition, headPosition;
+    // var dataSkip = /transformData|path|assetType|timing|poses/;
+    var options = KT.cast('CommandConfig').Options(options) ||KT.cast('CommandConfig').Options();
+    options.layer.skipParented = true;
+    var projectStructure = this.consolidateProjectStructure(characterData.name);
+  
+    //TODO: determinar cual va a ser la construccion final
+    var bodyComp = KT.findItem(new RegExp(characterData.acronym + '_body_rig'))
+
+    //BODY
+    if(!bodyComp) {
+      options.comp.settings.name = characterData.acronym + '_body_rig'
+      var bodyComp = KT.cast('CompManager').createComp(options);
+      bodyComp.parentFolder = projectStructure.rigsFolder;
+    }
+    //head
+    var headComp = this.buildHead(characterData.head, projectStructure, options);
+    var bodyComp = this.buildBody(characterData.body, projectStructure, options);
+    var pivotLayer
+    for(var i = 1; i <= bodyComp.layers.length; i++) {
+      if(!bodyComp.layers[i].nullLayer) {
+        break
+      }
+      pivotLayer = bodyComp.layers[i];
+    }
+
+    headLayer = bodyComp.layers.byName('head_rig');
+    if(!headLayer) {
+      headLayer = bodyComp.layers.add(headComp);
+      headLayer.replaceSource(headComp, false);
+    }
+    headLayer.name = headLayer.name.replace(characterData.acronym +'_', '')
+    anchorPoint = [headComp.width/2, headComp.height/2] + characterData.base.head.anchorPoint;
+    headLayer.transform.anchorPoint.setValue(anchorPoint);
+    hipsPosition = bodyComp.layers.byName('H | hips').transform.position.value;
+    spineVector =  characterData.base.body.position - characterData.base.head.position;
+    headPosition = hipsPosition - spineVector;
+    headLayer.transform.position.setValue(headPosition);
+    this.generateAsset(characterData.head.hair_back, bodyComp, projectStructure.headFootageFolder, projectStructure.headCompsFolder, headLayer.transform.position.value, options)
+    KT.cast('CompManager').fitCompsToContent([bodyComp], options)
+    headLayer.moveAfter(pivotLayer);
+
+    //Rig the character with duik api.
+    if(options.commandOpts.rigWithDuik) {
+      this.initDuik();
+      this.rigHead(characterData.head)
+      this.rigBody(bodyComp)
+    } else if(options.commandOpts.rigBodyWithDuik) {
+      this.initDuik();
+      this.rigBody(bodyComp)
+    } else if(options.commandOpts.rigHeadWithDuik) {
+      this.initDuik();
+      this.rigHead(characterData.head)
+    }
+  },
+
+  /**Builds the head of the character
+   * @function buildHead
+   * @memberof CharacterRigger
+   * @param {Object}  data - The head data object.
+   * @param {Object}  structure - The project folder Structure.
+   * @param {Options} options - A KT Options object
+   * @todo - 1- Perform diagonal calculations and set the base keyframes.
+   *         2- Integrate it with duik api(When bug is solved)
+   */
+  function buildHead(data, structure,  options){
+    var layer, pivotLayer, headBase, oldMouthPos ;
+    var dataSkip = /transformData|path|assetType|timing|poses|acronym|comp|layer/;
+    var headComp = KT.findItem(new RegExp(data.acronym + '_head_rig'));
+    if(!headComp) {
+      options.comp.settings.name = data.acronym + '_head_rig'
+      headComp = KT.cast('CompManager').createComp(options);
+      headComp.parentFolder = structure.rigsFolder;
+    }
+
+    data.comp = headComp;
+    //Generate base asset: skull
+    headBase = headComp.layers.byName('skull');
+    if(!headBase) {
+      headBase = this.generateAsset(data.skull,  headComp, structure.headFootageFolder, structure.headCompsFolder, [0, 0], options)
+    } else {
+      headBase = this.placeBaseAsset(data.skull, headBase, headComp)
+    }
+
+    //Generate head assets except the mouth
+    basePosition =  headBase.layer.transform.position.value - data.skull.transformData.position;
+    for(var i in data) {
+      if(/mouth|hair_back/g.test(i) || dataSkip.test(i)) {
+        continue
+      }
+      if(/skull/g.test(i)) {
+        this.generateAsset(data[i], headComp, structure.headFootageFolder, structure.headCompsFolder, [0, 0], options)
+      }
+      this.generateAsset(data[i], headComp, structure.headFootageFolder, structure.headCompsFolder, basePosition, options)
+    }
+    
+    for(var i = 1; i <= headComp.layers.length; i++) {
+      if(!headComp.layers[i].nullLayer) {
+        break
+      }
+      pivotLayer = headComp.layers[i];
+    }
+    //Generate the mouth assets
+    oldLayer = pivotLayer
+    basePosition = data.mouth.transformData.position + basePosition;
+    for(var i in data.mouth) {
+      if(dataSkip.test(i)) {
+        continue
+      }
+      layer = this.generateAsset(data.mouth[i], headComp, structure.headFootageFolder, structure.headCompsFolder, basePosition, options)
+      // layer = layer.layer
+      // layer.moveAfter(pivotLayer)
+      // oldLayer = layer;
+    }
+
+    this.maskLayer('teeth_upr', 'mt_back', headComp)
+    this.maskLayer('teeth_lwr', 'mt_back', headComp)
+    this.maskLayer('mt_bell', 'mt_back', headComp)
+    this.maskLayer('mt_back', 'mt_back', headComp)
+    this.maskLayer('hair_top', 'skull', headComp);
+
+    data.mouth.mt.layer.moveAfter(pivotLayer)
+    data.nose.layer.moveAfter(pivotLayer);
+    data.skull.layer.moveToEnd()
+
+
+    //Linking special parts.
+    data.eye_lid_L.layer.parent = data.eye_pupil_L.handleLayer.parent = data.eye_ball_L.handleLayer;
+    data.eye_lid_R.layer.parent = data.eye_pupil_R.handleLayer.parent = data.eye_ball_R.handleLayer;
+    data.mouth.teeth_lwr.layer.parent = data.mouth.mt.layer;
+    data.mouth.bell.layer.parent = data.mouth.teeth_upr.layer.parent = data.mouth.back.handleLayer;
+
+    this.removeHandleLayer(data.eye_lid_L)
+    this.removeHandleLayer(data.eye_lid_R);
+    this.removeHandleLayer(data.mouth.bell);
+    this.removeHandleLayer(data.mouth.teeth_upr); 
+    this.removeHandleLayer(data.mouth.teeth_lwr);
+
+
+    //Generate single mouth controller;
+    var mouthHandler = headComp.layers.byName('H | mouth')
+    mouthHandler = (!mouthHandler)? headComp.layers.addNull() : mouthHandler; 
+    data.mouth.handleLayer = mouthHandler;
+    if(data.mouth.handleLayer.locked) {
+      data.mouth.handleLayer.locked = false;
+      data.mouth.handleLayer.name = 'H | mouth';
+      data.mouth.handleLayer.locked = true
+    } else {
+      data.mouth.handleLayer.name = 'H | mouth';
+    }
+    data.mouth.mt.handleLayer.parent = null;
+    data.mouth.back.handleLayer.parent = null;
+    var mtPosition = data.mouth.mt.handleLayer.transform.position.value;
+    data.mouth.handleLayer.transform.position.setValue(mtPosition)
+    data.mouth.mt.handleLayer.parent = data.mouth.handleLayer;
+    data.mouth.back.handleLayer.parent = data.mouth.handleLayer;
+    
+    // this.setHeadKeys(data)
+    KT.cast('CompManager').fitCompsToContent([headComp], options);
+    return headComp
+  },
+
+  function rigBody(comp){
+    comp.openInViewer();
+    Duik.structures.mammal();
+    this.renameDuikBones();
+    this.adjustBones();
+    this.parentBoneLayers();
+    Duik.structures.select();
+    Duik.constraints.autorig();
+  },
+
+  function removeHandleLayer(data) {
+
+    data.handleLayer.remove();
+    // data.handleLayer = data.layer.parent;
+  },
+
+  /**Builds the head of the character
+   * @function buildBody
+   * @memberof CharacterRigger
+   * @param {Object}  data - The head data object.
+   * @param {Object}  structure - The project folder Structure.
+   * @param {Options} options - A KT Options object
+   * @todo - 1- Integrate it with duik api(When bug is solved).
+   */
+  function buildBody(data, structure,  options){
+    var layer, pivotLayer, oldLayer, bodyBase;
+    var dataSkip = /transformData|path|assetType|timing|poses|acronym|comp|layer/;
+    var bodyComp = KT.findItem(new RegExp(data.acronym + '_body_rig'));
+    if(!bodyComp) {
+      options.comp.settings.name = data.acronym + '_body_rig'
+      bodyComp = KT.cast('CompManager').createComp(options);
+      bodyComp.parentFolder = structure.rigsFolder;
+    }
+
+    //Generate base asset: skull
+    bodyBase = bodyComp.layers.byName('neck');
+    if(!bodyBase) {
+      bodyBase = this.generateAsset(data.neck,  bodyComp, structure.bodyFootageFolder, structure.bodyCompsFolder, [0, 0], options)
+    } else {
+      bodyBase = this.placeBaseAsset(data.neck, bodyBase, bodyComp)
+    }
+
+    //Generate body assets except the mouth
+    basePosition =  bodyBase.layer.transform.position.value - data.neck.transformData.position;
+    for(var i in data) {
+      if(/mouth/g.test(i) || dataSkip.test(i)) {
+        continue
+      }
+      this.generateAsset(data[i], bodyComp, structure.bodyFootageFolder, structure.bodyCompsFolder, basePosition, options)
+    }
+
+    options.layer.skipParented = true;
+    KT.cast('CompManager').fitCompsToContent([bodyComp], options);
+    return bodyComp
+  },
+
+  function maskLayer(layerName, maskLayerName, comp) {
+    var layer = comp.layers.byName(layerName);
+    var masterLayer = comp.layers.byName(layerName + '_mask');
+    var maskLayer = (!masterLayer) ? comp.layers.byName(maskLayerName).duplicate() : masterLayer;
+    maskLayer.locked = false;
+    maskLayer.moveBefore(layer);
+    maskLayer.name = layerName + '_mask'
+    maskLayer.enabled = false;
+    maskLayer.shy = true;
+    maskLayer.parent = comp.layers.byName(maskLayer.parent.name.replace('H | ', ''))
+    maskLayer.locked = true;
+    layer.trackMatteType = TrackMatteType.ALPHA;
+
+  },
+
+  function generateAsset(data, parentComp, footageFolder, compsFolder, basePosition, options) {
+    var asset = this.createAsset(data, footageFolder, compsFolder, options);
+    return this.placeAsset(parentComp, asset, data, basePosition)
+  }, 
+
+  /**Make shure that the project has the correct structure. If folders ar missing they are created and arranged
+   * @function consolidateProjectStructure
+   * @memberof CharacterRigger
+   * @param {String} rootName - The name of the root folder or the name of the Character
+   * @returns An object containig the diferent project folders
+  */
+  function consolidateProjectStructure(rootName) {
+    var dataPath, rootFolder, structure;
+    dataPath = KT.env.getPath() + '/config/characterize_project_structure.json';
+    structure = JSON.parse(KT.readFile(dataPath))
+    rootFolder = KT.findItem(rootName, [FolderItem]);
+    rootFolder = (!rootFolder) ? app.project.items.addFolder(rootName) : rootFolder;
+
+    structure.rootFolder = rootFolder;
+    
+    function checkFolder(folderName, parentFolderName) {
+      var folder;
+      var parentFolder = structure[parentFolderName] 
+      KT.walkProjectFolder(parentFolder, function(item) { 
+        if(!(item instanceof FolderItem)) {
+          return
+        }
+        folder = (item.name == structure[folderName].name)? item: folder;
+      })
+      folder = (!folder || !(folder instanceof FolderItem))? app.project.items.addFolder(structure[folderName].name) : folder;
+      folder.parentFolder = (!folder.parentFolder || folder.parentFolder.name != parentFolder.name)? parentFolder : folder.parentFolder; 
+      return folder
+    }
+    
+    for(var i in structure) {
+      if(i == 'rootFolder') {
+        continue
+      }
+
+      structure[i] = checkFolder( i, structure[i].parent) 
+    }
+
+    return structure
+  },
+
+  /**Import assets, create a com if doesent exists, and place on the rig comp 
+   * @function createAsset
+   * @memberof CharacterRigger
+   * @param {Object}      data - The asset data object
+   * @param {FolderItem}  parentFolder - Th project parent folder of the asset
+  */
+  function createAsset(data, footageParentFolder, compParentFolder, options) {
+    var name, nameSplit, matchName, stripName, extension, asset, file, comp, duration, compName;
+    nameSplit = data.path.split('/');
+    name = nameSplit[nameSplit.length -1];
+    extension = name.split('.');
+    extension = extension[extension.length -1];
+    matchName = name.replace('.' + extension, '') + '.*\.' + extension;
+    matchName = new RegExp(matchName)
+    asset = KT.findItem(matchName, [FootageItem])
+    file = this.getFootageFile(data.path, data.assetType)
+    if(!file) {
+      return
+    }
+    if(!asset) {
+      asset = this.importAsset(file, data.assetType, footageParentFolder);
+    } else if(asset instanceof FootageItem) {
+      asset.replace(file);
+    }
+
+    stripName = /\[.*\]/;
+    compName = name.replace(stripName, '')
+    compName = name.replace('.' + extension, '');
+    comp = KT.findItem(compName,[CompItem]);
+    if(!comp) {
+      options.comp.settings.name = compName;
+      comp = KT.cast('CompManager').createComp(options);
+      comp.layers.add(asset)
+    };
+    KT.cast('CompManager').fitCompsToContent([comp], options);
+    comp.parentFolder = (compParentFolder) ? compParentFolder : comp.parentFolder;
+    if(data.assetType = 'still') {
+      KT.walk(comp.layers, function(layer) {
+        layer.duration = 10;
+      })
+    }
+    data.comp = comp;
+
+    KT.cast('CompManager').fitCompsToContentDuration([comp], options)
+    return comp
+  },
+
+  /**Get footage file depending on if it is a sequence or single file
+   * @function getFootageFile
+   * @memberof CharacterRigger
+   * @param {String} path - The path of the footage
+   * @param {String} assetType - Te type of the footage 
+   * @returns - The file or the first sequence file, if exists.
+   */
+  function getFootageFile (path, assetType) {
+    var file;
+    var nameSplit = path.split('/');
+    if(assetType == 'sequence') {
+      nameSplit.pop();
+      file = nameSplit.join('/');
+      file = new Folder(file).getFiles()[0]
+    } else {
+      file = new File(path)
+    }
+    return file
+  },
+
+  /**Imports an asset to the project
+   * @function importAsset
+   * @memberof CharacterRigger
+   * @param {File}       file - A single file or the first file in a sequence
+   * @param {String}     assetType - The type of the asset, still or sequence.
+   * @param {FolderItem} parentFolder - Th project parentFolder of the asset
+  */
+  function importAsset(file, assetType, parentFolder) {
+    var importOptions, asset
+    importOptions = new ImportOptions(file);
+    importOptions.sequence = assetType == 'sequence';
+    importOptions.importAs = ImportAsType.FOOTAGE;
+    asset = app.project.importFile(importOptions);
+    asset.parentFolder = (parentFolder)? parentFolder : asset.parentFolder;
+    return asset
+  },
+  function parentBodyToControlers() {},
+  function parentLayersToControllers() {},
+
+  /**Places an asset on a rig comp in the correct position
+   * @function placeAsset
+   * @function CharacterRigger
+   * @param {CompItem} parentComp - The parent comp to place the asset. 
+   * @param {CompItem} assetComp  - The asset comp to place
+   * @param {Object} data         - The asset transform data object.
+   * @param {Vector} basePosition - The position of the main asset
+   */
+  function placeAsset(parentComp, assetComp, data, basePosition) {
+    var layer, handleLayer, anchorPoint, position, locked, handleParent;
+    var transformData = data.transformData;
+    var basePosition = basePosition || [0,0];
+    layer = parentComp.layers.byName(assetComp.name);
+    if(!layer) {
+      layer = parentComp.layers.add(assetComp);
+    } else {
+      layer.replaceSource(assetComp, false);
+    }
+    
+
+    handleLayer = parentComp.layers.byName('H | ' + assetComp.name);
+    if(!handleLayer) {
+      handleLayer = parentComp.layers.addNull();
+      handleLayer.name = 'H | ' + assetComp.name;
+    }
+    handleParent = handleLayer.parent;
+    handleLayer.parent = null;
+    layer.locked = false;
+    if(handleLayer.transform.position.hasKeys) {
+      KT.cast('PropertyManager').removeKeys(handleLayer.transform.position)
+    }
+
+    layer.moveToEnd();
+    layer.parent = null;
+    layer.transform.position.setValue([0,0,0]);
+    layer.transform.rotation.setValue(0);
+    handleLayer.transform.position.setValue([0,0,0]);
+
+
+    handleLayer.locked = false
+    layer.parent = null;
+    anchorPoint = [assetComp.width/2, assetComp.height/2] + transformData.anchorPoint;
+    layer.transform.anchorPoint.setValue(anchorPoint);
+    layer.transform.rotation.setValue(transformData.rotation);
+    layer.parent = handleLayer;
+    handleLayer.transform.position.setValue(transformData.position + basePosition);
+    
+    layer.timeRemapEnabled = true;
+    layer.outPoint = parentComp.duration;
+    handleLayer.parent = handleParent;
+    data.handleLayer = handleLayer;
+    data.layer = layer
+    return {handle: handleLayer, layer: layer}
+  },
+
+    /** Cheks if there are a base asset in a comp, if exists, perform operations in base of this asset
+   * @function placeBaseAsset
+   * @memberof CharacterRigger
+   */
+  function placeBaseAsset(data, asset, parentComp, options) {
+    var position, handleLayer, comp, handleParent;
+    var layer = parentComp.layers.byName(asset.name);
+    if(!layer) {
+      return this.placeAsset( asset, parentComp, data.transformData)
+    }
+  
+    handleLayer = parentComp.layers.byName('H | ' + asset.name);
+    if(!handleLayer) {
+      handleLayer = parentComp.layers.addNull();
+      handleLayer.name = 'H | ' + assetComp.name;
+    } 
+    handleParent = handleLayer.parent;
+    layer.locked = false;
+    layer.parent = null;
+    layer.transform.position.setValue([0,0,0]);
+    layer.transform.rotation.setValue(0);
+    handleLayer.transform.position.setValue([0,0,0]);
+    comp = layer.source;
+    layer.replaceSource(comp, false);
+    layer.parent = handleLayer;
+    handleLayer.position.setValue(data.transformData.position);
+    handleLayer.parent = handleParent
+    return {handle: handleLayer, layer: layer}
+  },
+
+  /**Open a file dialog and reads a character data file
+   * @function readCharacterData
+   * @returns An object containing the character data.
+   */
+  function readCharacterData() {
+    var dataFile = KT.selectFile('Select a character data file');
+    if(!dataFile) {
+      return
+    }
+    var isJson = /\.json/g.test(dataFile.name);
+    if(!isJson) {
+      alert(dataFile.name + ' is not a \'.json\' file. Please, selecte a \'.json\' file.');
+      return
+    }
+    var characterName = dataFile.name.replace('(export_data).json', '');
+    var characterData = KT.readFile(dataFile);
+    if(!characterData) {
+      alert(dataFile.name + ' can\'t be readed.');
+      return
+    }
+    var acronymSplit = characterName.split(/\s|\_/g);
+    var acronym = '';
+    for(var i = 0, l = acronymSplit.length; i < l; i++) {
+      acronym += acronymSplit[i][0].toUpperCase()
+    } 
+    characterData = JSON.parse(characterData);
+    characterData.name = characterName;
+    characterData.acronym = characterData.body.acronym = characterData.head.acronym = acronym;
+    if(!characterData) {
+      alert(dataFile.name + ' seems to be corrupted. Please, export the character again.');
+      return
+    }
+    return characterData
+  },
+
+
+  /**Renames the Duik Bassel default names and removes the tips and othe unwanted Bones.
+   *   1- foot, calf, thigh, hand, forearm, arm and tiptoe are sufixed to L/R
+   *   2- Spine 1 is renamed to 'Belly' and Spine 2 to 'Chest'
+   *   3- tips, toes and heels are removed.
+   * @function renameDuikBones
+   * @memberof CharacterRigger
+   * @param {CompItem} comp - The comp in where the duik bones are.
+  */
+  function renameDuikBones(comp){
+    var layer;
+    var comp = comp || app.project.activeItem;
+    if(!comp || !(comp instanceof CompItem)) {
+      return
+    }
+    var isRight = true;
+    var newName = '';
+    var structMatch = /S\s\|/g;
+    var partMatch = /foot|calf|thigh|hand|forearm|arm|tiptoe/gi
+    var removeMatch = /tip|heel|toes/gi;
+    var spineMatch = /Spine/gi;
+    var sideMatch = /\s2|2/g;
+    var layers = KT.collectionToArray(comp.layers);
+
+    for(var i = 0; i < layers.length; i++){
+      layer = layers[i];
+      newName = layer.name;
+      if(removeMatch.test(layer.name)) {
+        layer.remove();
+        continue
+      }
+      layer.name.replace(structMatch, function(){
+        layer.name.replace(partMatch, function(){
+          layer.name.replace(sideMatch, function(match){
+            isRight = false;
+            newName = layer.name.replace(match, '')
+          });
+          layer.name = (isRight) ? newName + '_R' : newName + '_L';
+          isRight = true
+        });
+        layer.name.replace(spineMatch, function(match) {
+          layer.name = (match == 'Spine 2')? layer.name.replace('Spine 2', 'Chest') : layer.name = layer.name.replace('Spine', 'Belly')
+        })
+      })
+    }
+  },
+
+  /**Iterates over character data skiping internal properties or compound data 
+   * @function walkCharacterData
+   * @memberof CharacterRiger
+   * @param {Object} data - The data object to iterate.
+   * @param {String[]|RegExp} skips - Data members to skip over iteration.
+   * @param {Function} callback - A calback function to perform on each property.
+  */
+  function walkCharacterData (data, skips, callback) {
+    var dataSkip = /transformData|path|assetType|timing|poses|acronym|comp|layer/;
+    var skips = (skips instanceof RegExp) ? skips : new RegExp(skips.join('|'));
+    for(var i in data) {
+      if(dataSkip.test(i) || skips.test(i)) {
+        continue
+      }
+      callback(data[i])
+    }
+  },
+
+
+  function adjustBones(comp) {
+    var comp = comp || app.project.activeItem;
+    if(!comp || !(comp instanceof CompItem)) {
+      return
+    }
+    var arms = ['Arm', 'Forearm', 'Hand'];
+    var legs = ['Thigh', 'Calf', 'Foot'];
+    var body = ['Hips', 'Spine', 'Spine 2', 'Neck', 'Head']
+    this.adjustBoneParts(comp, 'R', arms);
+    this.adjustBoneParts(comp, 'L', arms);
+    this.adjustBoneParts(comp, 'R', legs);
+    this.adjustBoneParts(comp, 'L', legs);
+    this.adjustBoneParts(comp, null, body)
+  },
+
+  function adjustBoneParts(comp, side, parts) {
+    var layer, boneLayer, position, part, parentPosition, parentLayer;
+    var comp = comp || app.project.activeItem;
+    if(!comp || !(comp instanceof CompItem)) {
+      return
+    }
+    var side = (!side)? '' : '_' +side.toUpperCase();
+    var layers = comp.layers;
+    var prefix = comp.name.split('_')[0];
+    //Arm
+    for(var i = 0, l = parts.length; i < l; i++ ) {
+      part = parts[i];
+      layer = layers.byName('H | ' + part.toLowerCase() + side);
+      if(!layer) {
+        return
+      }
+      boneLayer = layers.byName('S | '+part + side);
+      parentLayer = boneLayer.parent;
+      boneLayer.parent = null;
+      position = layer.transform.position.value;
+      boneLayer.transform.position.setValue(position);
+      boneLayer.parent = parentLayer;
+    }
+  }, 
+
+  function parentBoneLayers(comp) {
+    var layer, parentLayer;
+    var comp = comp || app.project.activeItem;
+    if(!comp || !(comp instanceof CompItem)) {
+      return
+    }
+    var sideParts = ['Arm', 'Forearm', 'Hand', 'Thigh', 'Calf', 'Foot'];
+    var bodyParts = ['Hips', 'Neck', 'Head'];
+    this.parentBoneLayerParts(comp, 'L', sideParts);
+    this.parentBoneLayerParts(comp, 'R', sideParts);
+    this.parentBoneLayerParts(comp, null, bodyParts);
+  }, 
+
+  function parentBoneLayerParts(comp, side, parts) {
+    var layer, part, parentLayer;
+    var layers = comp.layers;
+    var side = (side) ? '_' + side.toUpperCase(): '';
+    for(var i = 0, l = parts.length; i < l; i++) {
+      part = parts[i];
+      parentLayer = layers.byName('S | ' + part + side);
+      layer = layers.byName('H | ' + part.toLowerCase() +  side);
+      if(layer != null) {
+        layer.parent = parentLayer
+      } 
+    }
+  },
+
+  function rigHead(data) {
+    var headComp = KT.findItem(/.*head_rig/, CompItem);
+    headComp.openInViewer();
+    this.setHeadOffsets(data)
+    this.setHeadKeys(data)
+  },
+
+  /** 
+   * creases
+   * eye_ball
+   * eye_brow
+   * eye_lid
+   * eye_pupil
+   * hair_back
+   * hair_fringe
+   * hair_top
+   * mouth
+   *    back
+   *    bell
+   *    handleLayer
+   *    mt
+   *    teeth_upr
+   *    teeth_lwr
+   * nose
+   * skull
+  */
+  function setHeadOffsets(headData) {
+    var data = headData;
+    data.nose.transformData.rigOffset = 1.4
+    data.mouth.transformData.rigOffset = 0.2;
+    data.eye_pupil_L.transformData.rigOffset = data.eye_pupil_R.transformData.rigOffset = 0.5;
+
+  },
+
+
+  /**Experimental */
+  function setHeadKeys (data, timing, degrees) {
+    var x1, y1, x2, y2, diagonal;
+    var timing = (!timing) ? [0, 1] : timing;
+    var degrees = (!degrees)? [225, 45] : degrees;
+    var comp = data.skull.layer.source;
+    var PI = 3.14159265359;
+    var radius = (comp.width < comp.height) ? comp.width : comp.height;
+    var hRadius = radius/6;
+    var wRadius = radius/7;
+    x1 = Math.cos(KT.degreesToRadians(degrees[0])) * wRadius;
+    y1 = Math.sin(KT.degreesToRadians(degrees[0])) * hRadius;
+    x2 = Math.cos(KT.degreesToRadians(degrees[1])) * wRadius;
+    y2 = Math.sin(KT.degreesToRadians(degrees[1])) * hRadius;
+
+    diagonal = [[x1, y1], [x2, y2]];
+    var controllerTypes = DuAEF.Duik.Controller.Types;
+    var controller = Duik.controllers.create( DuAEF.Duik.Controller.Types.DOUBLE_SLIDER )[0];
+    var parentPosition = controller.layer.transform.position;
+    parentPosition.dimensionsSeparated = true;
+    px = parentPosition.getSeparationFollower(0);
+    py = parentPosition.getSeparationFollower(1); 
+    this.walkCharacterData(data, ['skull', 'hair_back', 'hair_fringe','eye_lid'], function (item) {
+      var layer = item.handleLayer;// item.layer.parent;
+      if(!layer) {
+        return
+      }
+      var position = layer.transform.position.value
+
+      var offset = item.transformData.rigOffset || 1
+      layer.transform.position.setValueAtTime(timing[0], diagonal[0] * offset + position );
+      layer.transform.position.setValueAtTime(timing[1], diagonal[1] * offset + position)
+      position = layer.transform.position
+      position.dimensionsSeparated = true;
+      x = position.getSeparationFollower(0);
+      y = position.getSeparationFollower(1); 
+      DuAEF.Duik.Rigging.connector(x, px, null, -100, 100)
+      DuAEF.Duik.Rigging.connector(y, py, null, -100, 100)
+    })
+
+    //Rigging the nose
+    var noseHandler = data.nose.handleLayer;
+    var nose = data.nose.layer;
+    var rotation = noseHandler.transform.rotation;
+    rotation.setValueAtTime(timing[0], 34)
+    rotation.setValueAtTime(timing[1], -34);
+ 
+    DuAEF.Duik.Rigging.connector(rotation, px, null, -100, 100)
+    // var nRotation = nose.transform.rotation;
+    // nRotation.setValueAtTime(timing[0], 34)
+    // nRotation.setValueAtTime(timing[1], 0)
+    // rotation.setValueAtTime(timing[1] + (timing[1] - timing[0]), -34);
+    // DuAEF.Duik.Rigging.connector(nRotation, py, null, -100, 100)
+  },
+)

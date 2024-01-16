@@ -1,0 +1,16 @@
+KT.Spell('TestingSpell', 
+  function() {
+    KT.cast('CharacterRigger').initDuik();
+    this.createController(app.project.activeItem.layers.byName('Testing Layer'))
+  }, 
+  
+  function createController(childLayer, min, max){
+    var controller = Duik.controllers.create(DuAEF.Duik.Controller.Types.DOUBLE_SLIDER)[0];
+    var parentProp = controller.layer.transform.position;
+    var childProp = childLayer.transform.position;
+
+    DuAEF.Duik.Rigging.connector(childProp, controller.layer.transform.position);
+
+
+  }
+)

@@ -1,0 +1,221 @@
+(function(){
+//WARNING. Revisar las Regexp porque pilla con Match names ADBE Positon_0, etc
+/** A configuration object to pass as argument in KT.Properties
+* @typedef {Object} PropertyOptions
+* @member {Layer|PropertyBase[]} source - A layer or an array of layer properties
+* @member {Function} [callback] - A callback function to perform on each properties : function(item, i) {....}
+* @member {Function} [do] - An alias for callback. If both members are passed, only 'do' is executed
+* @member {Function} [condition] - A condition function to filter each property.
+* @member {Function} [check] - An alias for condition. If both members are passed, only 'do' is executed
+* @member {Boolean} [selected=false] - If true, only selected properties are retrieved
+* @member {Boolean} [keyed=false] - If true, only keyed properties are retrieved
+* @member {Boolean} [groups=false] - If true, get also property Groups
+* @member {Boolean} [transform=false] - If true, get properties that belong to the layer effects transform group: anchor point, position...
+* @member {Boolean} [spatial=false] - Same as transform but without Opacity. It takes priority over 'transform'
+* @member {Boolean} [fx=false] - If true, get properties that belong to the layer effects.
+* @member {Boolean} [effects=false] - An alias for fx. 'fx' takes priority over 'effects'
+* @member {String|String[]} [names] -A name or array of the names of the properties to get.
+* @member {String|String[]} [matchNames] -A name or array of the match names of the properties to get.
+*/
+
+
+function addExpressionControl(layer, type, name, value) {
+  var control = layer.property('ADBE Effect Parade').addProperty('ADBE ' + type + ' Control');
+  control.name = name; 
+  control.property(1).setValue(value);
+  return control
+}
+
+
+function getPropertyPath(property) {
+  var path = property.name,
+      property = property;
+
+  while(property.parentProperty !== null) {
+    property = property.parentProperty;
+    if(property.parentProperty !== null) {
+      path = property.name + '//' + path
+    }
+  }
+  return path
+}
+
+
+function getPropertyLayer(property) {
+  var layer = property.parentProperty;
+
+  while(layer !== null && !_.isLayer(layer)  ) {
+    layer = layer.parentProperty;
+  }
+  return layer
+}
+
+function getKeyedProperties(opts) {
+  opts.keyed = true;
+  var properties =  KT.Properties(opts)
+  return properties
+}
+
+function getProperties(opts){
+  if(!opts.source || (!_.isLayer(opts.source) &&!_.isPropertyGroup(opts.source) && !_.isArray(opts.source))) return opts.properties;
+
+  //Set the defaults and point them to varibales for more cleaner logic code
+  var properties = opts.properties = _.isArray(opts.properties) ? opts.properties : [],
+      source = opts.source = opts.source,
+      selected = opts.selected = _.isBoolean(opts.selected) ? opts.selected : false,
+      keyed = opts.keyed = _.isBoolean(opts.keyed) ? opts.keyed : false,
+      groups = opts.groups = _.isBoolean(opts.groups) ? opts.groups : false,
+      condition = opts.condition = _.isFunction(opts.check) ?  opts.check : _.toCondition(opts.condition),
+      callback = opts.callback = _.isFunction(opts.do) ?  opts.do : _.toCallback(opts.callback),
+      names = _.toRegExp(opts.names),
+      matchNames = _.toRegExp(opts.matchNames),
+      i = 1,
+      len = opts.source.numProperties,
+      property;
+
+  //If source is Layer and selected is true, get the array direcly from layer
+  if(selected === true && source.selectedProperties !== undefined) { 
+    opts.source = source.selecterProperties;
+  }
+
+  if(_.isArray(source)) {
+    for(i = 0, len = source.length; i < len; i++) {
+      property = source[i];
+      if(!_.isProperty(property)) continue;
+      checkProperty(property)
+    }
+  } else if(_.isPropertySource(source)){
+    for(;i <= len; i++) {
+      checkProperty(source.property(i));
+    }
+  } 
+
+  //Function to check if the property passes the filters
+  //If it passes is stored in the properties array
+  function checkProperty(property) {
+    if (!_.isProperty(property)) return;
+    var pass = keyed === true ? _.hasKeys(property) : true;
+    pass = selected === true ? pass && property.selected : pass;
+    pass = groups === true ? pass && _.isPropertyGroup(property) : pass && !_.isPropertyGroup(property);
+    pass = names != null ? property.name.match(names) !== null && pass : pass;
+    pass = matchNames != null ? property.matchName.match(matchNames) !== null && pass : pass;
+    pass =  pass && condition(property, i);
+
+    if(pass === true) {
+      property = callback(property);
+      properties.push(property);
+    }
+    
+    if(_.isPropertyGroup(property)) {
+      opts.source = property;
+      getProperties(opts);
+    }
+  }
+  // if(properties.length !== 0) {$.bp()};
+  return properties
+}
+
+
+
+////////////////////////////////////
+////////WORKING ON THIS////////////
+function getFxProperties(opts) {
+  if (!_.isLayer(opts.source)) return [];
+
+  setOptionsToFalse(opts);
+  opts.source = opts.source.Effects;
+  var properties = KT.Properties(opts);
+  return properties
+
+}
+
+function getSpatialProperties(opts) {
+  var props = getTransformProperties(opts);
+      props = _.filter(props, function(prop) {return prop.matchName !== KT.MatchNames.AVLayer.position});
+
+  return props;
+}
+
+
+function getTransformProperties(opts) {
+  var matchNames = new RegExp(KT.MatchNames.AVLayer.transform.join('|')),
+      properties,
+      check
+
+  setOptionsToFalse(opts);
+  opts.source = opts.source.Transform//.property(KT.MatchNames.AVLayer.transformGroup);
+  properties = KT.Properties(opts)
+  return properties
+}
+
+
+function removeKeys (property , reverse) {
+  if(property.numKeys < 1) {return };
+  var len = 0 ,
+      i = property.numKeys ;
+
+  for(i;  i > len;  i-- ) {
+    property.removeKey(i)
+  }
+}
+
+
+function setOptionsToFalse(opts) {
+  opts.transform = false;
+  opts.spatial = false;
+  opts.fx = false;
+  opts.effects = false;
+}
+
+function Properties(){}
+
+Properties.prototype = {
+  init: function(opts) {
+    var getFiltered = opts.transform || opts.spatial || opts.fx ||opts.effects,
+        props = [],
+        transformProps = [],
+        spatialProps = [],
+        fxProps = [],
+        customOpts;
+    
+    opts.condition = _.isFunction(opts.check) ?  opts.check : _.toCondition(opts.condition);
+    opts.callback = _.isFunction(opts.do) ?  opts.do : _.toCallback(opts.callback);
+
+    if(getFiltered === true) {
+      if(opts.transform === true) {
+        customOpts = _.clone(opts)
+        transformProps = getTransformProperties(customOpts);
+        var stop = 0;
+      }
+      if(opts.spatial === true) {
+        customOpts = _.clone(opts)
+        spatialProps = getSpatialProperties(customOpts)
+      }
+      if(opts.effects || opts.fx) {
+        customOpts = _.clone(opts)
+        fxProps = getFxProperties(customOpts);
+        var stop = 0
+      }
+    } else {
+      props =getProperties(opts)
+    }
+
+    props = _.union(props, transformProps, spatialProps, fxProps)
+    props = _.uniq(props);
+
+    return props
+     
+  },
+}
+
+
+KT.Properties = KT.ExtendArray(Properties)
+
+KT.Properties.getPropertyPath = getPropertyPath;
+KT.Properties.getPropertyLayer = getPropertyLayer;
+KT.Properties.addControl = addExpressionControl;
+KT.Properties.removeKeys = removeKeys;
+})();
+
+
+

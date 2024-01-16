@@ -1,0 +1,17 @@
+KT.Spell('Karaoke',
+  function run() {
+    var options = KT.cast('CommandConfig').Options( {
+      commandOpts: {
+        audio:'test_vox'
+      },
+      comp: {
+        settings:{
+          open: true
+        }
+      }
+    })
+    var times = KT.cast('AudioAnalyzer').getVoiceLines(options);
+    $.bp()
+  },
+  function audio(){}
+)

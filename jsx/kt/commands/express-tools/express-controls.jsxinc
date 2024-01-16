@@ -1,0 +1,49 @@
+(function(){
+
+function ExpressTools() {}
+
+
+
+function selectLayer(layerName, isSelected) {
+  if(isSelected === false) {
+    var layer = KT.Layers.getSelected()[0],
+        registered = _.isLayer(KT.Store.add(layerName, layer))
+    
+    return registered;
+  } else if (isSelected === true) {
+    KT.Store.delete(layerName)
+  }
+}
+
+
+function moveLayerIndex(index, layerName) {
+  var selectedLayer = KT.Store.get(layerName),
+      layers,
+      i,
+      len,
+      callback,
+      comp,
+      currentLayer;
+
+  if(_.isLayer(selectedLayer)) {
+    comp = selectedLayer = containingComp()
+    layers = KT.Layers.getSelected();
+    len = layers.length;
+    i = 1;
+    callback = index > 0 ? 'moveBefore' : 'moveAfter';
+    currentLayer = layers[0];
+    currentLayer[callback](selectedLayer)
+
+    for(; i < len; len++) {
+      
+      layers[i].moveAfter(currentLayer)
+      currentLayer = layers[i];
+    }
+  } else {
+    
+  }
+
+}
+
+KT.Commands.ET = ExpressTools;
+})();

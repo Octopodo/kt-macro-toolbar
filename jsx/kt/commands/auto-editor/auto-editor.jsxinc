@@ -1,0 +1,186 @@
+(function(){
+
+var MAIN_COMP_NAME = 'KT-Auto Edit',
+    KT_FOLDER_NAME = "KT_AUTO_EDITOR"
+    PROJECT_FOLDER_NAME = 'KT-AutoEdit',
+    NESTED_FOLDER_NAME = 'KT-Nests',
+    SEQUENCE_MIN_DURATION = 5;
+
+
+
+
+function AutoEditor(options) {
+  // alert(JSON.stringify(options.animateScale))
+  var comp = KT.Store.get(options.compItemName),
+      audio = KT.Store.get(options.audioItemName),
+      items = app.project.selection,
+      strength = options.strength || 0,
+      zoomStrength = options.zoomStrength || 0,
+      outPoint = 0,
+      duration =  options.duration || SEQUENCE_MIN_DURATION,
+      seguenceInfo = [],
+      projectFolder = KT.Project.masterFolder().name + '//',
+      i = 0,
+      insideWorkArea=options.insideWorkArea === true ? true : false,
+      startTime = insideWorkArea === true ? comp.workAreaStart : 0,
+      workareaTolerance = options.workareaTolerance || 0,
+      masterFolder,
+      nestedFolder,
+      avrgDuration,
+      item,
+      layer,
+      len,
+      result;
+
+  if(!_.isComp(comp)) { return }
+  else if( (items.length < 1 || _.isFolder(items)) && comp.layers.length < 1) { return }
+
+  comp.openInViewer()
+
+  //CREAR PROYECTO//
+  masterFolder = KT.Project.addFolder(projectFolder + KT_FOLDER_NAME);
+  
+  
+    //DEAL WITH AUDIO AND AUDIO//
+  duration = comp.duration;
+  options.audioItemName = _.isString(options.audioItemName)  ? options.audioItemName : '';
+  if(_.isAudio(audio) && !comp.layers.byName(audio.name)) {
+    comp.layers.add(audio)
+    duration = audio.duration > duration ? audio.duration : duration;
+  } else if(_.isAudioLayer(comp.layers.byName(options.audioItemName))){
+    duration = comp.layers.byName(audio.name).source.duration
+  }
+
+  duration = insideWorkArea === true ? comp.workAreaDuration : duration;
+
+
+
+  //SELECT ITEMS//
+  //Layers:
+  if ( comp.layers.length > 0 ) {
+    options.items = KT.Layers({
+      source: comp,
+      condition: function(layer) {
+        var typePass = true; 
+        
+        if(options.insideWorkArea === true){
+          typePass = layer.selected === true || KT.Layers.insideWorkArea(layer, workareaTolerance)
+        }  
+        pass = typePass 
+          && _.isAVLayer(layer) 
+          && !_.isAudioLayer(layer) 
+          && !_.isSolidLayer(layer) 
+          && !_.isNullLayer(layer) 
+          && !_.isAdjustmentLayer(layer);
+        return pass
+      },
+    });
+    options.items.reverse()
+  } 
+
+  //Project Items
+  if(items.length > 0 && !insideWorkArea){
+    options.items = options.items instanceof KT.Layers ? options.items : KT.Layers();
+    nestedFolder  = KT.Project.addFolder(projectFolder + KT_FOLDER_NAME + '//' + NESTED_FOLDER_NAME);
+    len = items.length;
+
+    for(i; i < len; i++) {
+      if(_.isFolder(items[i]) || _.isAudio(items[i]) || items[i] === comp) { continue }
+      item = KT.Project.addCompFromItem(items[i], nestedFolder);
+      item = comp.layers.add(item)
+      options.items.push(item)
+    }
+  }
+
+
+  avrgDuration = duration / options.items.length;
+
+  options.items.sequence(false, startTime, function(layer, i, layers) {
+    var randomness = _.isNumber(options.randomness) ? options.randomness : 0,
+        xDir, yDir, zoom, zoomLayer;
+    // alert(randomness)
+    clipDuration = avrgDuration + KT.Math.randomInt(-randomness, randomness);
+    clipDuration = clipDuration <= 0 ? 1 : clipDuration;
+        
+    
+    layer.timeRemapEnabled = true;
+
+    KT.Properties({
+      source: layer,
+      matchNames: ['ADBE Time Remapping'],
+      callback: function(prop) {
+        var value = prop.keyValue(2) - comp.frameDuration
+        prop.setValueAtKey(2, value)
+      }
+    })
+    layer.outPoint = layer.startTime + clipDuration;
+
+
+    if(options.animatePosition === true) {
+      xDir = KT.Math.randomInt(-1, 1);
+      yDir = xDir === 0 ? KT.Math.randomSign() : KT.Math.randomInt(-1, 1);
+      // alert(layer.name + ': ' + xDir + ', ' + yDir)
+      $.writeln(layer.name + ': ' + xDir + ', ' + yDir);
+      KT.Layers.pan(layer, [xDir, yDir], strength)
+    }
+    
+    if(options.animateScale === true && KT.Math.randomInt(0, 1) > 0) {
+      KT.Layers.zoom(layer, options.zoomStrength)
+    }
+  })
+
+
+  if(!insideWorkArea) {
+    duration = duration < options.items.tail().outPoint ? options.items.tail().outPoint : duration;
+    comp.duration = duration;
+    KT.Store.delete(options.compItemName);
+  }
+
+  KT.Store.delete(options.audioName);
+
+  result = {
+    audio: KT.Store.exists(options.audioItemName), 
+    comp: KT.Store.exists(options.compItemName)
+  }
+
+  return JSON.stringify(result)
+}
+
+
+function autoPan(comp, direction, strength) {
+  // alert(JSON.stringify(arguments[0]) + '\n' + JSON.stringify(arguments[1]) + '\n' + JSON.stringify(arguments[1]));
+  var layers = KT.Layers( {source: comp.selectedLayers})
+  layers.pan(direction, strength);
+  layers.select();
+}
+
+
+
+function align(comp, direction) {
+  var layers = KT.Layers( {source: comp.selectedLayers})
+  layers.align(direction);
+  layers.select();
+}
+
+
+function autoZoom(comp, strength, reset) {
+  var layers = KT.Layers( {source: comp.selectedLayers} );
+  layers.zoom(strength, reset);
+  layers.select();
+}
+
+
+
+
+AutoEditor.autoPan = autoPan;
+AutoEditor.align = align;
+AutoEditor.autoZoom = autoZoom;
+
+
+
+
+KT.Commands.AutoEditor = AutoEditor;
+
+})();
+
+

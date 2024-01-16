@@ -1,0 +1,40 @@
+(function() {
+
+var matchNames = {
+  Layer:{
+    effects: 'ADBE Effect Parade',
+  },
+
+  AVLayer: {
+    transformGroup: 'ADBE Transform Group',
+    anchorPoint: 'ADBE Anchor',
+    position: 'ADBE Position',
+    positionX: 'ADBE Position 0',
+    positionY: 'ADBE Position 1',
+    positionZ: 'ADBE Position 2',
+    scale: 'ADBE Scale',
+    orientation: 'ADBE Orientation',
+    rotateX: 'ADBE Rotate X',
+    rotateY: 'ADBE Rotate Y',
+    rotateZ: 'ADBE Rotate Z',
+    opacity: 'ADBE Opacity',
+    transform: [
+      'ADBE Anchor',
+      'ADBE Position',
+      'ADBE Position 0',
+      'ADBE Position 1',
+      'ADBE Position 2',
+      'ADBE Scale',
+      'ADBE Orientation',
+      'ADBE Rotate X',
+      'ADBE Rotate Y',
+      'ADBE Rotate Z',
+      'ADBE Opacity'
+    ],
+    
+  }
+}
+
+
+KT.MatchNames = matchNames;
+})();

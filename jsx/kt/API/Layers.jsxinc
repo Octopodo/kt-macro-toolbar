@@ -1,0 +1,716 @@
+(function() {
+
+
+
+
+function sourceRectAtTime(layer) {
+  var properties = KT.Properties({source: source, transform: true}),
+      properties;
+}
+
+
+function sequenceLayers(layers, inverted, startTime, callback) {
+  if(!(layers instanceof KT.Layers)) { return }
+
+  var i = inverted === true ? layers.length - 1 : 0,
+      len = inverted === true ? 0 : layers.length,
+      layer,
+      lastOut = _.isNumber(startTime) ? startTime : layers[i].outPoint;
+      callback = _.toCallback(callback)
+
+  function condition() {
+    return inverted === true ? i > len : i < len
+  }
+  function iterate () {
+    if(inverted === true) {
+      i --
+    } else {
+      i++
+    }
+  }
+
+  for(;condition(); iterate()){
+    layer = layers[i];
+    layer.startTime = layer.inPoint - layer.startTime + lastOut;
+    callback(layer, i, layers);
+    lastOut = layer.outPoint;
+  }
+
+}
+
+
+function getBounds(layers){
+  if(!_.isArray(layers) && !_.isLayer(layers)) { return {}}
+
+  var layers = _.isArray(layers) ? layers : [layers],
+      bounds = {},
+      boundsCollection = [],
+      newBounds,
+      props = [],
+      keys = [],
+      keyedProps = [],
+      layer,
+      dataLayer,
+      dataProperty,
+      comp, lastComp,
+      i = 0, p = 0, k = 1,
+      len = layers.length, plen, klen;
+
+  for(; i < len; i++) {
+    layer = layers[i];
+    comp = layer.containingComp;
+    dataLayer = KT.Project.dataLayer()
+    dataProperty = dataLayer.property("Source Text");
+    collectBounds(layer);
+  }
+
+  bounds.left = _.min(boundsCollection, function(b){return b.left}).left;
+  bounds.top = _.min(boundsCollection, function(b){return b.top}).top;
+  bounds.bottom = _.max(boundsCollection, function(b){return b.bottom}).bottom;
+  bounds.right = _.max(boundsCollection, function(b){return b.right}).right;
+  bounds.width = bounds.right - bounds.left;
+  bounds.height = bounds.bottom - bounds.top;
+
+  // $.write(JSON.stringify(boundsCollection, null, 2))
+  function collectBounds(layer) {
+    var props = KT.Properties({source:layer, transform: true, keyed: true});
+    var keys = KT.Keys({source: props});
+    if(keys.length){
+      keys = _.uniq(keys, false, 'time')
+      for(klen = keys.length, k = 0; k < klen; k++){
+        key = keys[k];
+        dataProperty = KT.Expressions.add(dataProperty, 'getBounds', key.time, layer.containingComp, layer)
+        newBounds = JSON.parse(dataProperty.valueAtTime(key.time, false));
+        boundsCollection.push(newBounds);
+      }
+    } else {
+      dataProperty = KT.Expressions.add(dataProperty, 'getBounds', 0, layer.containingComp, layer)
+      newBounds = JSON.parse(dataProperty.valueAtTime(0, false));
+      boundsCollection.push(newBounds);
+    }
+  }
+
+  return bounds;
+}
+
+
+/*
+Implementar funcion para coger los limites de la capa
+Sin tener en cuenta la opacidad
+*/
+function getSouceBounds(layer) {
+
+}
+
+
+
+/** A configuration object to pass as argument in KT.Properties
+* @typedef {Object} LayerOptions
+* @member {Layer|Layer[]|Comp|Comp[]} source - A layer, a comp or an Array of both
+* @member {Function} [callback] - A callback function to perform on each layer : function(item, i) {....}
+* @member {Function} [do] - An alias for callback. If both members are passed, only 'do' is executed
+* @member {Function} [condition] - A condition function to filter each layer.
+* @member {Function} [check] - An alias for condition. If both members are passed, only 'do' is executed.
+* @member {Boolean} [LayerTypes] - A layer type named property to get specific layer type: {comps: true, cameras: true}
+* @member {String|String[]} [names] -A name or array of the names of the properties to get.
+* @member {PropertyOptions} [properties] - A PropertyOptions object to filter the layers based on the property matches.
+
+
+
+/** Main function to filter and get layers
+* @function getLayers
+* @memberof KT.Layers
+* @param {LayerOptions} opts - A LayerOptions object
+* @returns {Array} - An array with the filterd layers or an empty array
+*/
+function getLayers(opts) {
+  opts.source = !opts.source ? KT.Project.getActiveComp() : opts.source;
+  var sources = _.isArray(opts.source) ? _.uniq(_.flatten(Array.prototype.slice.call(opts.source))) : [opts.source],
+      layers = [],
+      comps = [],
+      condition = opts.condition = _.isFunction(opts.check) ?  opts.check : _.toCondition(opts.condition, true),
+      callback = opts.callback = _.isFunction(opts.do) ?  opts.do : _.toCallback(opts.callback),
+      names = _.toRegExp(opts.names),
+      layerCheckers = opts.layerCheckers,
+      i = 1, 
+      len,
+      comp,
+      layer,
+      check;
+
+  _.each(sources, function(source, index) {
+    if(_.isLayer(source)) {
+      checkLayer(source, index);
+    } else if(_.isComp(source)) {
+      for(i = 1, len = source.numLayers; i <= len; i++) {
+        checkLayer(source.layers[i], index)
+      }
+    }
+  });
+
+  //Filter each layer
+  function checkLayer(layer, index) {
+    //First check the type of layer. If no coincidences return
+    if(layerCheckers.length > 0) {
+      pass = _.find(layerCheckers, function(checker) {
+        return checker(layer)
+      })
+      if(!pass) return
+    }
+    var layer = layer,
+        pass = names !== null ? layer.name.match(names) !== null : true;
+    pass = pass && condition(layer, index);
+    if(pass === true) {
+      layers.push(layer)
+    }
+  }
+  return layers
+}
+
+
+function alignLayer(layer, direction) {
+    var alignData = getAlignData(layer, direction);
+    offsetLayerPosition(layer, alignData)
+}
+
+function getAlignData(layer, direction) {
+  if(!_.isLayer(layer)) {return};
+
+  var direction = _.twoDVector(direction),
+      dx = -direction[0],
+      dy = -direction[1],
+      x = layer.transform.position.value[0],
+      y = layer.transform.position.value[1],
+      compWidth = layer.containingComp.width,
+      compHeight = layer.containingComp.height,
+      bounds,
+      h,
+      v;
+
+  if(direction === [0, 0]) { return }
+
+  bounds = getBounds(layer);
+
+  if(dx > 0) {
+    h = bounds.left;
+    dx*= -1;
+    compWidth = 0;
+  } else  {
+    h = bounds.right;
+  }
+
+  if(dy > 0) {
+    v = bounds.top;
+    compHeight = 0;
+    dy*= -1;
+  } else {
+    v = bounds.bottom;
+    
+  }
+
+  h = dx * (h - compWidth );
+  v = dy * (v- compHeight);  
+
+  return {x: h, y: v}
+}
+/*
+
+OFFSET Must be {x , y, z} object
+*/
+
+function offsetLayerPosition(layer, offset) {
+  var position = layer.Transform.position,
+      keys = position.numKeys,
+      value,
+      k = 1;
+
+  offset.x = _.isNumber(offset.x) ? offset.x : 0;
+  offset.y = _.isNumber(offset.y) ? offset.y : 0;
+  offset.z = _.isNumber(offset.x) ? offset.z : 0;
+  if(keys > 0) {
+    for(;k <= keys; k++) {
+      value = position.keyValue(k);
+      value = [
+        offset.x + value[0],
+        offset.y + value[1],
+        offset.z || 0 + (value[2] || 0)
+      ]
+      position.setValueAtKey(k, value)
+    }
+  }else{
+    value = position.value;
+    value = [
+      offset.x ? offset.x + value[0] : value[0],
+      offset.y ? offset.y + value[1] : value[1],
+      offset.z ? offset.z + value[2] : value[2] || 0
+    ]
+    position.setValue(value)
+  }
+}
+
+function offsetLayerScale(layer, offset) {
+  var property =  layer.Transform.scale,
+      keys = property.numKeys,
+      value,
+      k = 1;
+
+  offset.x = _.isNumber(offset.x) ? offset.x : 0;
+  offset.y = _.isNumber(offset.y) ? offset.y : 0;
+  offset.z = _.isNumber(offset.z) ? offset.z : 0;
+  if(keys > 0) {
+    for(;k <= keys; k++) {
+      value = property.keyValue(k);
+      value = [
+        offset.x + value[0],
+        offset.y + value[1],
+        offset.z || 0 + (value[2] || 0)
+      ]
+      property.setValueAtKey(k, value)
+    }
+  }else{
+    value = property.value;
+    value = [
+      offset.x ? offset.x + value[0] : value[0],
+      offset.y ? offset.y + value[1] : value[1],
+      offset.z ? offset.z + value[2] : value[2] || 0
+    ]
+    property.setValue(value)
+  }
+
+}
+
+
+
+//GET 
+// function getLayerRatio(width, height, , compWidth, compHeight) {
+//   // Obtener el ancho y la altura del otro rectángulo
+//   const layerWidth = width;
+//   const layerHeight = height;
+
+//   // Calcular el porcentaje
+//   if (newWidth !== null) {
+//     percent = (compWidth / layerWidth) * 100;
+//   } else if (newHeight !== null) {
+//     percent = (compHeight / layerHeight) * 100;
+//   } else {
+//     percent = 50;
+//   }
+
+//   return percent;
+// }
+
+
+
+function fitLayerToComp(layer, margins, axis) {
+  if(!_.isLayer(layer) 
+  ||_.isAudioLayer(layer) 
+  ||(!_.isAVLayer(layer) && !_.isTextLayer(layer))
+  && !_.isShapeLayer(layer)) 
+  {
+    return;
+  }
+  var bounds = getBounds(layer),
+      margins = _.twoDVector(margins),
+      mX = margins[0]/100,
+      mY = margins[1]/100,
+      bw = bounds.width === 0 ? 1 : bounds.width,
+      bh = bounds.height === 0 ? 1 : bounds.height
+      comp = layer.containingComp,
+      ratioX = comp.width/bw + mX,
+      ratioY = comp.height/bh + mY;
+      
+    if(axis === 0) {
+      ratioY = ratioX
+    } else if(axis === 1) {
+      ratioX = ratioY
+    }
+    
+  
+  KT.Properties({
+    source: layer,
+    matchNames: 'ADBE Scale',
+    callback: function(property) {
+      x = Math.abs(property.value[0] * ratioX)
+      y = Math.abs(property.value[1] * ratioY)
+      property.setValue([x, y])
+    }
+  });
+
+  alignLayer(layer, [-1, -1])
+  return getBounds(layer)
+}
+
+/**
+Find th axis to fit the comp
+Return a property
+**/
+function findMinAxis(layer) {
+  if (!_.isLayer(layer)) { return }
+
+  var comp = layer.containingComp, 
+      bounds = getBounds(layer),
+      x = comp.width - bounds.width,
+      y = comp.height - bounds.height,
+      max = Math.max(x, y);
+
+  max = max === x ? 0 : 1;
+  return max
+}
+
+
+function checkAndFit(layer, force) {
+
+  var axis = findMinAxis(layer),
+      bounds = getBounds(layer),
+      comp = layer.containingComp;
+      percentX = layer.source.width/comp.width,
+      percentY = layer.source.height/comp.height;
+  
+
+  if(bounds.width * percentX < comp.width || bounds.height * percentY < comp.height || force === true) {
+    fitLayerToComp(layer, undefined, axis);
+  }
+
+  return {x: percentX, y: percentY}
+
+}
+
+
+
+function panLayer(layer, direction, strength) {
+  var direction = _.twoDVector(direction),
+      strength = !_.isNumber(strength) ? 0 : strength,
+      // strength = strength < 1 && strength > -1 ? stremgth * 100 : strength, // si es un porcentaje en coma multiplicar por 100 Revisar
+      key1 = {time: layer.inPoint, value: 0},
+      key2 = {time: layer.outPoint, value: 0},
+      position = layer.transform.position,
+      scale = layer.transform.scale,
+      comp = layer.containingComp,
+      minScale = 115,
+      alignData,
+      percent,
+      minPercent,
+      correctedScale,
+      axis;
+    
+    KT.Properties.removeKeys(position)
+    percent = checkAndFit(layer);
+    correctedScale = {
+      x: scale.value[0] * percent.x,
+      y: scale.value[1] * percent.y
+    }
+
+    minPercent = Math.min(percent.x, percent.y);
+    minPercent = minPercent === 0? 1 : minPercent;
+    //>>>>>>>>>>>>>>>>>------------------<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    //Hay que calcularlo proporcionalmente con el tamaño de composicion
+    strength = ( correctedScale.x <= minScale || correctedScale.y <= minScale )? strength / minPercent: 0 ;
+
+    offsetLayerScale(layer, {x: strength, y: strength});
+    alignLayer(layer, direction);
+    layer.transform.position.setValueAtTime(key1.time ,position.value);
+    direction = [-direction[0], -direction[1]];
+    alignData = getAlignData(layer, direction);
+    alignData = [position.value[0] + alignData.x, position.value[1] + alignData.y];
+    layer.transform.position.setValueAtTime(key2.time , alignData)
+}
+
+
+function zoomLayer(layer, strength, reset){
+  if(!strength) { return }
+
+  var scale = layer.transform.scale,
+      absStrength = Math.abs(strength),
+      value = [scale.value[0] + absStrength, scale.value[1]  + absStrength],
+      t1 = strength > 0 ? layer.inPoint : layer.outPoint,
+      t2 = strength > 0 ? layer.outPoint: layer.inPoint;
+
+  KT.Properties.removeKeys(scale)
+  checkAndFit(layer, reset);
+  scale.setValueAtTime(t1, scale.value);
+  scale.setValueAtTime(t2, value)
+
+}
+
+function eachLayer(callback, args) {
+  for(var i = 0, len = this.length; i < len; i++){
+    callback.apply(this, args);
+  }
+}
+
+function layerIsInsideWorkArea(layer, tolerance) {
+  var maxTolerance = 10,
+      comp = layer.containingComp,
+      tolerance = tolerance || 0,
+      tolerance = tolerance/10 * comp.workAreaDuration/100,
+      start = comp.workAreaStart + tolerance,
+      out = comp.workAreaStart + comp.workAreaDuration - tolerance,
+      inPoint = layer.inPoint,
+      outPoint = layer.outPoint,
+      inside = (inPoint > start && inPoint <out) 
+      ||(outPoint > start && outPoint < out)
+  
+  return inside
+}
+
+
+
+function moveLayer (layer, time) {
+  var newTime = layer.startTime - layer.inPoint + time;
+  layer.startTime = newTime;
+  return newTime
+}
+
+function moveLayerToCurrentTime(layer) {
+  moveLayer(layer, layer.containingComp.time)
+}
+
+function moveLayerToWorkArea(layer, startOrEnd) {
+  var comp = layer.containingComp,
+      start = startOrEnd === true,
+      end = startOrEnd === false,
+      mid = startOrEnd === undefined || start === null,
+      workarea = _.ternary(
+        start, comp.workAreaStart,
+        end, comp.workAreaStart + comp.workAreaDuration,
+        mid, comp.workAreaStart + comp.workAreaDuration/2
+      )
+
+  moveLayer(layer, workarea)
+  return workarea
+}
+
+function getSelectedLayers(opts) {
+  var opts = opts || {};
+  opts.condition = function(layer) {
+    return layer.selected
+  }
+  var layers = KT.Layers(opts)
+  return layers
+}
+
+
+function reverseLayersInTimeline(layers) {
+  
+  var layers = layers || KT.Layers.getSelected();
+      len = layers.length,
+      i = 1,
+      pivotLayer = layers[0],
+      layer;
+
+  for(; i < len; i++) {
+    layer  = layers[i];
+    layer.moveBefore(pivotLayer)
+    pivotLayer = layer
+  }
+}
+
+
+
+function removeLayerKeys(layer, props) {
+  var props = _.toArray(props),
+      i = 0,
+      len = props.length,
+      prop;
+ 
+  for(; i < len; i++) {
+    prop = props[i];
+    prop = layer.transform[prop];
+    
+    if(_.isProperty(prop)) {
+      KT.Properties.removeKeys(prop)
+    }
+  }
+}
+
+/////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+
+/** A private object that maps layer type checker function under the extended underscore namespace
+* @typedef {Object} checkLayerType
+* @memberof KT.Layers
+* @private
+*/
+var layerCheckers = {
+  texts: _.isTextLayer,
+  cameras: _.isCameraLayer,
+  lights: _.isLightLayer,
+  AVLayers: _.isAVLayer,
+  solids: _.isSolidLayer,
+  nulls: _.isNullLayer,
+  adjustment: _.isAdjustmentLayer,
+  footage: _.isFootageLayer,
+  comps: _.isCompLayer,
+}
+
+/** Function to filter and retrieve layers from various source.
+* It is a wrapper of GetLayers
+* @function Layers
+* @memberof KT
+*/
+function Layers () {}
+function initLayers(opts){
+  // if (!opts) {return []};
+  var opts = opts || {},
+      layers = [],
+      customOpts,
+      condition = opts.condition = _.isFunction(opts.check) ?  opts.check : _.toCondition(opts.condition),
+      callback = opts.callback = _.isFunction(opts.do) ?  opts.do : _.toCallback(opts.callback);
+
+  opts.layerCheckers = []
+  opts.allTypes = _.isBoolean(opts.allTypes) ? opts.allTypes :  true; 
+
+  //Check property filters
+  if(_.isObject(opts.properties)) {
+    opts.condition = function(layer, i) {
+      var propOpts = _.clone(opts.properties),
+          keyedProperties;
+      propOpts.source = layer;
+      keyedProperties = KT.Properties(propOpts);
+      return keyedProperties.length > 0 && condition(layer, i)
+    }
+  }
+
+  //Check if layertypes are passed as opts properties and push the adecuate checker if so
+  for(var i in layerCheckers) {
+    if(_.isBoolean(opts[i])) {
+      opts.layerCheckers.push(layerCheckers[i])
+    }
+  }
+  
+  //Get the layers
+  layers = getLayers(opts);
+
+  //Perform the callback
+  _.each(layers, function(layer, i) {
+    callback(layer, i)
+    layer.duration = layer.outPoint - layer.inPoint;
+  }) 
+  return layers
+}
+
+
+
+Layers.prototype = {
+  init: function(opts) {
+    return initLayers(opts)
+  },
+
+
+  bounds: function(){
+    return getBounds(this)
+  }, 
+  offsetPosition: function(offset) {
+    for(var i = 0, len = this.length; i < len; i++){
+      offsetLayerPosition(this[i], offset)
+    }
+    return this
+  },
+  offsetScale: function(offset) {
+    for(var i = 0, len = this.length; i < len; i++){
+      offsetLayerScale(this[i], offset, true)
+    }
+    return this
+  },
+  align: function(direction) {
+    for(var i = 0, len = this.length; i < len; i++){
+      alignLayer(this[i], direction)
+    }
+    return this
+  },
+  fitToComp: function(margins, axis) {
+    for(var i = 0, len = this.length; i < len; i++){
+      fitLayerToComp(this[i], margins, axis)
+    }
+    return this
+  },
+  checkAndFit: function() {
+    for(var i = 0, len = this.length; i < len; i++){
+      checkAndFit(this[i], true)
+    }
+    return this
+  },
+
+  move: function(time) {
+    for(var i = 0, len = this.length; i < len; i++){
+      moveLayer(this[i], time)
+    }
+    return this
+  },
+  moveToCurrentTime: function() {
+    for(var i = 0, len = this.length; i < len; i++){
+      moveLayerToCurrentTime(this[i])
+    }
+    return this
+  },
+  select: function(select) {
+    for(var i = 0, len = this.length; i < len; i++){
+      select = select === undefined ? true : select
+      this[i].selected = select
+    }
+    return this
+  },
+  pan: function (direction, strength) {
+    var randDirection = !direction
+    for(var i = 0, len = this.length; i < len; i++){
+      var direction = randDirection 
+        ? [KT.Math.randomInt(-1, 1), KT.Math.randomInt(-1, 1)]
+        : direction;
+      panLayer(this[i], direction, strength)
+    }
+    return this
+  },
+
+  removeKeys: function(props) {
+    for(var i = 0, len = this.length; i < len; i++){
+      removeLayerKeys(this[i], props)
+    }
+    return this
+  },
+
+  reverse: function() {
+    reverseLayersInTimeline(this)
+    return this
+  },
+
+  toWorkArea: function(startOrEnd) {
+    for(var i = 0, len = this.length; i < len; i++){
+      moveLayerToWorkArea(this[i], startOrEnd)
+    }
+    return this
+  },
+
+  zoom: function ( strength, reset) {
+    for(var i = 0, len = this.length; i < len; i++){
+      zoomLayer(this[i], strength, reset)
+    }
+    return this
+  },
+
+  sequence: function(reverse, startTime, callback) {
+    sequenceLayers(this, reverse, startTime, callback)
+    return this
+  },
+
+  tail: function() {
+    var last = this.length > 0 ? this[this.length -1 ] : this
+    return last
+  }
+}
+
+KT.Layers = KT.ExtendArray(Layers);
+
+KT.Layers.bounds = getBounds;
+// KT.Layers.sequence = sequenceLayers;
+KT.Layers.fitToComp = fitLayerToComp;
+KT.Layers.findMinAxis = findMinAxis;
+KT.Layers.getAlignData = getAlignData;
+KT.Layers.align = alignLayer;
+KT.Layers.pan = panLayer;
+KT.Layers.zoom = zoomLayer;
+KT.Layers.fitAxis = checkAndFit;
+KT.Layers.insideWorkArea = layerIsInsideWorkArea;
+KT.Layers.getSelected = getSelectedLayers;
+})();
+

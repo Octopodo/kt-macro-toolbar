@@ -1,0 +1,9 @@
+KT.Commands = {};
+#include "components/index.jsxinc"
+#include "flash-importer/index.jsxinc"
+#include "character-builder/index.jsxinc"
+#include "express-tools/index.jsxinc"
+#include "text/index.jsxinc"
+#include "karaoke/index.jsxinc"
+#include "auto-editor/index.jsxinc"
+#include "project-items/index.jsxinc"

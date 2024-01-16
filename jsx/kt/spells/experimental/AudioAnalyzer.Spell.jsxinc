@@ -1,0 +1,42 @@
+KT.Spell('AudioAnalyzer',
+
+function getVoiceLines(options){
+  var layer, property, times, greatThanZero, firstKey, comp, commandId;
+  var audioItem = options.commandOpts.audio;
+  audioItem = (audioItem instanceof FootageItem) ? audioItem : KT.findItem(new RegExp(audioItem), [FootageItem])
+  var limit = options.commandOpts.gainLimit || 0.05;
+  options.comp.settings.name = 'Master Comp';
+  options.comp.settings.duration = audioItem.duration;
+  options.properties.keyed = true
+  commandId = options.commandOpts.commandId || "Convertir audio en fotogramas clave"
+  comp = KT.cast('CompManager').createComp(options);
+  comp.layers.add(audioItem);
+  app.executeCommand(app.findMenuCommandId(commandId));
+  layer = comp.layers[1];
+  property = layer.property("ADBE Effect Parade").property("ADBE Slider Control").property("ADBE Slider Control-0001")
+  firstKey =(options.time.offset >= 0)? property.numKeys: 1;
+  greatThanZero = (property.keyValue(firstKey) > limit ) ? false: true
+  times = [];
+  options.interval.end = comp.duration;
+  KT.cast('PropertyManager').crawl([property], options, function(prop, opts, keyIterator){
+    var key = keyIterator.k
+    var value = prop.keyValue(key);
+    if(greatThanZero) {
+      if(value > limit){
+        times.push(prop.keyTime(key));
+        greatThanZero = false
+      } else {
+        prop.removeKey(key);
+      }
+    } else {
+      if(value <= limit) {
+        times.push(prop.keyTime(key));
+        greatThanZero = true
+      }
+    }
+  })
+  $.writeln('Times calculated')
+  return times
+},
+
+)

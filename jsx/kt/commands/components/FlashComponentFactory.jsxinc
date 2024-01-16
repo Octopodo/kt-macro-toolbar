@@ -1,0 +1,17 @@
+(function() {
+
+
+function createComponent(data) {
+  var component;
+
+  switch(data.type){
+  default:
+    component = new KT.Components.Flash.Component(data)
+  }
+
+  return component;
+}
+
+KT.Components.Flash.create = createComponent;
+
+})();

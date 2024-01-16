@@ -1,0 +1,51 @@
+(function() {
+
+function analyze() {
+  var newData = [],
+      file = KT.IO.readFileDialog(),
+      data = JSON.parse(file),
+      data = _.filter(data.monologues['0'].elements, function(word) { return word.type === 'text'}),
+      splitData = [],
+      splitWord,
+      i = 0, j = 0,
+      len = data.length, jlen,
+      word,
+      start,
+      increment;
+
+  for(; i < len; i++) {
+    word = data[i];
+    splitWord = [];
+    jlen = word.value.length;
+    increment = (word.end_ts - word.ts) / jlen;
+    time = word.ts;
+    splitWord.push({
+        letter: word.value[0],
+        time: time      
+      })
+    if(jlen <= 1) continue;
+    for(j = 1; j < jlen; j++){
+      time += increment;
+      splitWord.push({
+        letter: word.value[j],
+        time: time 
+      })
+    }
+
+    splitData.push(splitWord);
+  }
+
+  data = JSON.stringify(splitData, null, 4);
+
+  file = File.saveDialog();
+  KT.IO.writeFile(file, data)
+
+
+}
+function AudioToText(){}
+
+AudioToText.analyze = analyze;
+
+KT.Experimental = {}
+KT.Experimental.AudioToText = AudioToText;
+})();

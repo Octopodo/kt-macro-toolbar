@@ -1,0 +1,177 @@
+﻿//File Manager
+
+
+{
+    
+var KT_FILE_MANAGER = 50;
+
+var KT_FileManager = {}
+
+
+/**/
+KT_FileManager.importRig = function()
+{
+    //Here starts the clean function
+    var folder = KT.selectFolderDialog();
+
+    if(!folder) {
+        return
+    }
+
+    rigFolder = app.project.items.addFolder(folder.name);
+    footageFolder = app.project.items.addFolder(footageFolderName);
+    footageFolder.parentFolder = rigFolder;
+    this.importFolderRig(folder, rigFolder);
+}
+
+
+KT_FileManager.importFolderRig= function(folder, aeFolder){
+  
+    folder.getFiles(function(file){
+        var _aeFolder = aeFolder;
+        var reg = extensionData.custom.sequence;
+        var isFootage = file.name.match(extensionData.custom.all) != null;
+        if (!isFootage && file instanceof Folder) {
+            var newAeFolder = app.project.items.addFolder(Folder.decode(file.name));
+            newAeFolder.parentFolder = aeFolder;
+            this.importFolderRig(file, newAeFolder);
+        } else if (isFootage == true){
+            this.importFootage(file, aeFolder);
+            } 
+        
+        })
+    
+    }
+
+KT_FileManager.importFootage = function(file, aeFolder ) {
+    var isSequence = file instanceof Folder;
+    var isAudio = file.name.match(extensionData[os].audio) != null;
+    var footage = (isSequence)? file.getFiles().sort()[0]: file;
+    var importOptions = new ImportOptions(footage);
+    importOptions.sequence = isSequence;
+    footage = app.project.importFile(importOptions);
+    footage.parentFolder = footageFolder;
+    if (!isAudio) {
+        footage = cm.createCompFromFile(footage, aeFolder);
+        footage.name = (isSequence) ? KT.stripFramesFromString(footage.name): footage.name;
+        }
+    }
+
+
+
+KT_FileManager.replaceRig = function() {
+    var items =  KT.collectProjectSelection([FootageItem]);
+    if (items.length <= 0) { return }
+    var folder = KT.selectFolderDialog();
+    if(! folder) { return }
+    
+    this.replaceRigFiles(folder, items);   
+    if(oldRigPrefix != newRigPrefix) {
+        KT_FileManager.clean(KT.collectProjectSelection([CompItem, FootageItem], false), oldRigPrefix);
+        var items = KT.collectionToArray(app.project.items);
+        var comps = KT.collectProjectSelection(CompItem, null, items);
+        $.writeln(items.length);
+        pm.fixCompExpressions(comps, oldRigPrefix, newRigPrefix);
+        
+        };
+    
+    
+    
+    oldRigPrefix = "";
+    newRigPrefix = "";
+
+    }
+
+
+KT_FileManager.replaceRigFiles= function(folder, items) {
+    function filter(file){
+        var fileName = File.decode(file.name);
+        if (fileName.match(extensionData.custom.all)) {
+            var matchName = KT.stripPrefix(KT.stripFileExtension(KT.stripFramesFromString(fileName)));
+            var matchItem = KT.findItem(matchName, FootageItem, items);
+            //Filter sequences and replace them
+            if (fileName.match(matchName) ) {
+                if (matchItem instanceof FootageItem) {
+                    oldRigPrefix = (oldRigPrefix == "") ? KT.getPrefix(matchItem.name, prefixDelimiter) : oldRigPrefix;
+                    this.replaceRigFootage(matchItem, file, matchName);
+                    newRigPrefix = (newRigPrefix == "") ? KT.getPrefix(matchItem.name, prefixDelimiter) : newRigPrefix;
+                    return
+                } else {
+//~                     var extrasFolder = app.project.items.addFolder("New Elements")
+//~                     this.importFootage(file, extrasFolder)
+                    }
+                }
+            }
+         
+         if(file instanceof Folder) {
+            this.replaceRigFiles(file, items)
+            }
+  
+        }
+    
+    folder.getFiles(filter);
+    }
+
+
+KT_FileManager.replaceRigFootage = function(item, file, matchName){
+    oldRigPrefix = KT.getPrefix(item.name, prefixDelimiter);
+    newRigPrefix = KT.getPrefix(file.name, prefixDelimiter);
+    var isSequence = item instanceof Folder;
+    var footage = (isSequence)? folder.getFiles().sort()[0] : file;
+    footage = (isSequence)? item.replaceWithSequence(footage, false) : item.replace(footage);
+    var usedIn = item.usedIn;
+    
+    for (var i = 0; i < usedIn.length; i++) {
+        var comp = usedIn[i];
+        comp.name = newRigPrefix + prefixDelimiter + matchName;
+        cm.fitCompsToContent(comp, 'full');
+        cm.fitCompDurationToContent(comp);
+        }
+    }
+
+
+KT_FileManager.replaceRigFootageOld = function(item, file, matchName){
+    var comp = KT.findItem(matchName, CompItem);
+    var isSequence = item instanceof Folder;
+    var footage = (isSequence)? folder.getFiles().sort()[0] : file;
+    footage = (isSequence)? item.replaceWithSequence(footage, false) : item.replace(footage);
+    var _item = item;
+    var _file = file;
+    if (comp instanceof CompItem) {
+        var prefix = KT.getPrefix(item.name, prefixDelimiter);
+        comp.name = prefix + prefixDelimiter + matchName;
+        cm.fitCompsToContent(comp, 'full');
+        cm.fitCompDurationToContent(comp);
+        }
+    }
+
+
+KT_FileManager.clean = function(items, matchName) {
+    var clean = true;
+    
+    for (var i = 0; i < items.length; i ++){
+        var item = items[i];
+        if(item.name.match(new RegExp (matchName)) != null && !(item instanceof FolderItem)) {
+            item.remove();
+            }
+        }
+    }
+
+KT_FileManager.generateRigData = function() {
+    
+    }
+
+
+KT_FileManager.getProjectPath = function() {
+    if(app.project.file !== null){
+        return app.project.file.fsName
+    } else {
+        return false
+    }
+}
+///////////////////////////////////////////////////////////////////////////
+
+
+KT.fm = KT_FileManager;
+
+}

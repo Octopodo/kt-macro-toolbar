@@ -1,0 +1,588 @@
+[
+    [
+        {
+            "letter": "H",
+            "time": 0.18
+        },
+        {
+            "letter": "o",
+            "time": 0.2775
+        },
+        {
+            "letter": "l",
+            "time": 0.375
+        },
+        {
+            "letter": "a",
+            "time": 0.4725
+        }
+    ],
+    [
+        {
+            "letter": "e",
+            "time": 1.11
+        },
+        {
+            "letter": "s",
+            "time": 1.1775
+        },
+        {
+            "letter": "t",
+            "time": 1.245
+        },
+        {
+            "letter": "o",
+            "time": 1.3125
+        }
+    ],
+    [
+        {
+            "letter": "e",
+            "time": 1.38
+        },
+        {
+            "letter": "s",
+            "time": 1.425
+        }
+    ],
+    [
+        {
+            "letter": "u",
+            "time": 1.47
+        },
+        {
+            "letter": "n",
+            "time": 1.55
+        },
+        {
+            "letter": "a",
+            "time": 1.63
+        }
+    ],
+    [
+        {
+            "letter": "p",
+            "time": 1.71
+        },
+        {
+            "letter": "r",
+            "time": 1.77
+        },
+        {
+            "letter": "u",
+            "time": 1.83
+        },
+        {
+            "letter": "e",
+            "time": 1.89
+        },
+        {
+            "letter": "b",
+            "time": 1.95
+        },
+        {
+            "letter": "a",
+            "time": 2.01
+        }
+    ],
+    [
+        {
+            "letter": "d",
+            "time": 2.07
+        },
+        {
+            "letter": "e",
+            "time": 2.16
+        }
+    ],
+    [
+        {
+            "letter": "a",
+            "time": 2.25
+        },
+        {
+            "letter": "u",
+            "time": 2.334
+        },
+        {
+            "letter": "d",
+            "time": 2.418
+        },
+        {
+            "letter": "i",
+            "time": 2.502
+        },
+        {
+            "letter": "o",
+            "time": 2.586
+        }
+    ],
+    [
+        {
+            "letter": "p",
+            "time": 2.7
+        },
+        {
+            "letter": "a",
+            "time": 2.7525
+        },
+        {
+            "letter": "r",
+            "time": 2.805
+        },
+        {
+            "letter": "a",
+            "time": 2.8575
+        }
+    ],
+    [
+        {
+            "letter": "v",
+            "time": 2.91
+        },
+        {
+            "letter": "e",
+            "time": 2.97
+        },
+        {
+            "letter": "r",
+            "time": 3.03
+        }
+    ],
+    [
+        {
+            "letter": "c",
+            "time": 3.09
+        },
+        {
+            "letter": "ó",
+            "time": 3.1575
+        },
+        {
+            "letter": "m",
+            "time": 3.225
+        },
+        {
+            "letter": "o",
+            "time": 3.2925
+        }
+    ],
+    [
+        {
+            "letter": "f",
+            "time": 3.36
+        },
+        {
+            "letter": "u",
+            "time": 3.435
+        },
+        {
+            "letter": "n",
+            "time": 3.51
+        },
+        {
+            "letter": "c",
+            "time": 3.585
+        },
+        {
+            "letter": "i",
+            "time": 3.66
+        },
+        {
+            "letter": "o",
+            "time": 3.735
+        },
+        {
+            "letter": "n",
+            "time": 3.81
+        },
+        {
+            "letter": "a",
+            "time": 3.885
+        }
+    ],
+    [
+        {
+            "letter": "l",
+            "time": 3.96
+        },
+        {
+            "letter": "a",
+            "time": 4.035
+        }
+    ],
+    [
+        {
+            "letter": "A",
+            "time": 4.11
+        },
+        {
+            "letter": "P",
+            "time": 4.21
+        },
+        {
+            "letter": "I",
+            "time": 4.31
+        }
+    ],
+    [
+        {
+            "letter": "d",
+            "time": 4.44
+        },
+        {
+            "letter": "e",
+            "time": 4.515
+        }
+    ],
+    [
+        {
+            "letter": "r",
+            "time": 4.59
+        },
+        {
+            "letter": "e",
+            "time": 4.71
+        },
+        {
+            "letter": "d",
+            "time": 4.83
+        }
+    ],
+    [
+        {
+            "letter": "p",
+            "time": 5.02
+        },
+        {
+            "letter": "u",
+            "time": 5.15
+        },
+        {
+            "letter": "n",
+            "time": 5.28
+        },
+        {
+            "letter": "t",
+            "time": 5.41
+        },
+        {
+            "letter": "o",
+            "time": 5.54
+        }
+    ],
+    [
+        {
+            "letter": "p",
+            "time": 6.81
+        },
+        {
+            "letter": "a",
+            "time": 6.87
+        },
+        {
+            "letter": "r",
+            "time": 6.93
+        },
+        {
+            "letter": "a",
+            "time": 6.99
+        }
+    ],
+    [
+        {
+            "letter": "l",
+            "time": 7.05
+        },
+        {
+            "letter": "a",
+            "time": 7.125
+        }
+    ],
+    [
+        {
+            "letter": "d",
+            "time": 7.2
+        },
+        {
+            "letter": "e",
+            "time": 7.26333333333333
+        },
+        {
+            "letter": "t",
+            "time": 7.32666666666667
+        },
+        {
+            "letter": "e",
+            "time": 7.39
+        },
+        {
+            "letter": "c",
+            "time": 7.45333333333333
+        },
+        {
+            "letter": "c",
+            "time": 7.51666666666667
+        },
+        {
+            "letter": "i",
+            "time": 7.58
+        },
+        {
+            "letter": "ó",
+            "time": 7.64333333333333
+        },
+        {
+            "letter": "n",
+            "time": 7.70666666666667
+        }
+    ],
+    [
+        {
+            "letter": "d",
+            "time": 7.77
+        },
+        {
+            "letter": "e",
+            "time": 7.845
+        }
+    ],
+    [
+        {
+            "letter": "t",
+            "time": 7.92
+        },
+        {
+            "letter": "e",
+            "time": 8.04
+        },
+        {
+            "letter": "x",
+            "time": 8.16
+        },
+        {
+            "letter": "t",
+            "time": 8.28
+        },
+        {
+            "letter": "o",
+            "time": 8.4
+        }
+    ],
+    [
+        {
+            "letter": "v",
+            "time": 9.66
+        },
+        {
+            "letter": "e",
+            "time": 9.74333333333333
+        },
+        {
+            "letter": "r",
+            "time": 9.82666666666667
+        }
+    ],
+    [
+        {
+            "letter": "c",
+            "time": 9.93
+        },
+        {
+            "letter": "ó",
+            "time": 9.9975
+        },
+        {
+            "letter": "m",
+            "time": 10.065
+        },
+        {
+            "letter": "o",
+            "time": 10.1325
+        }
+    ],
+    [
+        {
+            "letter": "p",
+            "time": 10.2
+        },
+        {
+            "letter": "a",
+            "time": 10.275
+        },
+        {
+            "letter": "s",
+            "time": 10.35
+        },
+        {
+            "letter": "a",
+            "time": 10.425
+        }
+    ],
+    [
+        {
+            "letter": "l",
+            "time": 10.5
+        },
+        {
+            "letter": "a",
+            "time": 10.56
+        }
+    ],
+    [
+        {
+            "letter": "i",
+            "time": 10.62
+        },
+        {
+            "letter": "n",
+            "time": 10.7045454545455
+        },
+        {
+            "letter": "f",
+            "time": 10.7890909090909
+        },
+        {
+            "letter": "o",
+            "time": 10.8736363636364
+        },
+        {
+            "letter": "r",
+            "time": 10.9581818181818
+        },
+        {
+            "letter": "m",
+            "time": 11.0427272727273
+        },
+        {
+            "letter": "a",
+            "time": 11.1272727272727
+        },
+        {
+            "letter": "c",
+            "time": 11.2118181818182
+        },
+        {
+            "letter": "i",
+            "time": 11.2963636363636
+        },
+        {
+            "letter": "ó",
+            "time": 11.3809090909091
+        },
+        {
+            "letter": "n",
+            "time": 11.4654545454545
+        }
+    ],
+    [
+        {
+            "letter": "u",
+            "time": 11.76
+        },
+        {
+            "letter": "n",
+            "time": 11.835
+        }
+    ],
+    [
+        {
+            "letter": "J",
+            "time": 11.91
+        },
+        {
+            "letter": "a",
+            "time": 12
+        },
+        {
+            "letter": "c",
+            "time": 12.09
+        },
+        {
+            "letter": "k",
+            "time": 12.18
+        },
+        {
+            "letter": "s",
+            "time": 12.27
+        },
+        {
+            "letter": "o",
+            "time": 12.36
+        },
+        {
+            "letter": "n",
+            "time": 12.45
+        }
+    ],
+    [
+        {
+            "letter": "u",
+            "time": 12.75
+        },
+        {
+            "letter": "n",
+            "time": 12.81
+        }
+    ],
+    [
+        {
+            "letter": "t",
+            "time": 12.87
+        },
+        {
+            "letter": "e",
+            "time": 12.984
+        },
+        {
+            "letter": "x",
+            "time": 13.098
+        },
+        {
+            "letter": "t",
+            "time": 13.212
+        },
+        {
+            "letter": "o",
+            "time": 13.326
+        }
+    ],
+    [
+        {
+            "letter": "l",
+            "time": 13.62
+        },
+        {
+            "letter": "o",
+            "time": 13.695
+        }
+    ],
+    [
+        {
+            "letter": "q",
+            "time": 13.77
+        },
+        {
+            "letter": "u",
+            "time": 13.83
+        },
+        {
+            "letter": "e",
+            "time": 13.89
+        }
+    ],
+    [
+        {
+            "letter": "s",
+            "time": 13.95
+        },
+        {
+            "letter": "e",
+            "time": 14.08
+        },
+        {
+            "letter": "a",
+            "time": 14.21
+        }
+    ]
+]
